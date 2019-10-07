@@ -65,7 +65,21 @@ class AudioProcessor:
         energy_data = self.conv1D(kernel, data ** 2)
         return energy_data
 
-    def get_boundary(self, data, avg_zero, energy, low_gate=0.05, high_gate=0.3):
+    def get_boundary(self, data, avg_zero, energy, low_gate=0.08, high_gate=0.25, lmda=0.8):
+        """
+
+        :param data: windowed data of audio
+        :param avg_zero: average_zero_rate of audio
+        :param energy: energy of audio
+        :param low_gate:
+        :param high_gate:
+        :param lmda: select real gate between low gate and high gate
+        :return:
+        """
+
+        cropped_data = []
+        cropped_boundary = []
+
         metric = np.max(energy)  # + np.mean(energy)
         high = (energy > high_gate * metric) * 1
         low = 1 - (energy < low_gate * metric)
@@ -73,21 +87,27 @@ class AudioProcessor:
         diff_low = np.diff(low)
         high_boundary = np.vstack([np.where(diff_high == 1), np.where(diff_high == -1)]).transpose()
         low_boundary = np.vstack([np.where(diff_low == 1), np.where(diff_low == -1)]).transpose()
-        high_boundary = self._coalesce_boundary(high_boundary)
+        high_boundary = self._coalesce_boundary(high_boundary, strict=False)
         low_boundary = self._coalesce_boundary(low_boundary)
 
-        assert len(high_boundary) == len(low_boundary)
+        if len(high_boundary) != len(low_boundary):
+            print("Error, this file can't be loaded "
+                  "because high bound and low bound didn't match")
+            return cropped_data, cropped_boundary
 
-        cropped_data = []
-        cropped_boundary = []
+        assert len(high_boundary) == len(low_boundary)
+        assert len(high_boundary) <= 10
+
         for i in range(len(high_boundary)):
-            boundary = (high_boundary[i] + low_boundary[i]) // 2   # using the average between high and low
+            if not np.cumprod(high_boundary[i] - low_boundary[i])[1] < 0:  # lb and hb not match
+                pass
+            boundary = (high_boundary[i] * (1 - lmda) + lmda * low_boundary[i]).astype(np.int)   # using the average between high and low
             # boundary = low_boundary[i]
             cropped_data.append(data[boundary[0]: boundary[1] + 1])
             cropped_boundary.append(boundary)
         return cropped_data, cropped_boundary
 
-    def _coalesce_boundary(self, boundary, min_length = 20):
+    def _coalesce_boundary(self, boundary, min_length = 20, strict=True):
         """
         合并距离较近的边界
         :param boundary:
@@ -106,7 +126,10 @@ class AudioProcessor:
                     boundary[i + 1][0] = boundary[i][0]
                     continue
 
-            boundary_list.append(boundary[i])
+                if strict & (boundary[i][1] - boundary[i][0] < 0.8 * min_length):
+                    continue
+
+                boundary_list.append(boundary[i])
         return boundary_list
 
     def sum_per_frame_(self):
@@ -124,6 +147,11 @@ class AudioProcessor:
         return new_audio_data
 
     def get_feature(self):
+        """
+        get feature from audio with ten numbers
+        # TODO: this function only include features from 'square' and 'hanning' windows
+        :return:
+        """
         square_kernel = self.get_window(method='square')
         hanning_kernel = self.get_window(method='hanning')
         square_data = self.conv1D(square_kernel, self.audio_data)
@@ -134,10 +162,12 @@ class AudioProcessor:
         hanning_energy = self.get_energy(self.audio_data, hanning_kernel)
 
         # cut
-        crp_data, crp_boundary = self.get_boundary(square_data, square_azrate, energy)
+        crp_data, crp_boundary = self.get_boundary(square_data, square_azrate, square_energy)
 
-        # extract feature
         features = []
+        if (crp_data == []) | (crp_boundary == []):
+            return features
+        # extract feature
         for (lb, rb) in enumerate(crp_boundary):
             square_feature = np.hstack([square_data[lb: lb+20], square_azrate[lb: lb+20], square_energy[lb:lb+20]])
             hanning_feature = np.hstack([hanning_data[lb: lb+20], hanning_azrate[lb: lb+20], hanning_energy[lb:lb+20]])
