@@ -1,7 +1,7 @@
 import numpy as np
 import glob
 import os
-import csv
+import json
 from read_audio import AudioProcessor
 
 
@@ -36,18 +36,51 @@ from read_audio import AudioProcessor
 
 NUM = 10
 
-def save_file(data, save_dir, fname='data.csv'):
+
+def save_file(data, save_dir, fname='data.json'):
+    """
+    ERROR Json file can't not be saved
+    :param data:
+    :param save_dir:
+    :param fname:
+    :return:
+    """
     path = os.path.join(save_dir, fname)
-    # if not os.path.exists(path):
-    #     os.mkdir(path)
-    
+    js_data = json.dumps(data)
+    with open(path, 'w+', encoding='UTF-8') as file:
+        file.write(js_data)
+    print("Extracted data saved in {}".format(path))
+
+
+def load_file(save_path):
+    """
+    ERROR: json file can't be saved and loaded
+    :param save_path:
+    :return:
+    """
+    with open(save_path, 'r+', encoding='UTF-8') as file:
+        js = file.read()
+        data = json.load(js)
+    return data
+
 
 def data_loader(data_dir, frame_per_second=100, feature_length=20):
-    data_base = []
+    """
+    load all data from data_dir
+    :param data_dir:
+    :param frame_per_second:
+    :param feature_length:
+    :return: list of array
+    """
+    data_set = []
     for idx in range(NUM):
+
+        # find file with label idx
         data_path = os.path.join(data_dir, '*', '{}.*'.format(idx))
         file_list = glob.glob(data_path)
         features_list = []
+
+        # get audio data from file
         for file_path in file_list:
             A = AudioProcessor(frame_per_second, feature_length, file_path)
             features = A.get_feature()
@@ -56,17 +89,23 @@ def data_loader(data_dir, frame_per_second=100, feature_length=20):
                 continue
             features_list.append(features)
             print("Loaded feature {}".format(file_path))
-        data_base.append(features_list)
+        number = len(features_list)
+        features = np.vstack(features_list)
+        labels = np.ones([number, 1]) * idx
+        data = np.hstack([features, labels])
+        data_set.append(data)
         print("Loaded feature {}".format(idx))
-    return data_base
+    return data_set
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
+    
     np.random.seed(5)
     data_dir = "C:\\Users\\wsy\\Desktop\\data_set_z71"
     save_dir = "C:\\Users\\wsy\\Desktop"
     data_base = data_loader(data_dir)
-    save_file(data_base, save_dir)
+    # save_file(data_base, save_dir)
+    np.save(os.path.join(save_dir, 'data.npy'), np.vstack(data_base))
     print(len(data_base))
     print(len(data_base[5]))
 
