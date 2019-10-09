@@ -58,7 +58,7 @@ def data_loader(data_dir, frame_per_second=100, feature_length=20):
         # get audio data from file
         for file_path in file_list:
             A = AudioProcessor(frame_per_second, feature_length, file_path)
-            features = A.get_cropped_feature()
+            features = A.get_cropped_feature_v2()
             if features == [] or len(features) < 6 * feature_length:
                 print("extract error occurred in {}".format(file_path))
                 continue

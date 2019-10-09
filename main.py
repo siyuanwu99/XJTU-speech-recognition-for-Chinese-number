@@ -96,7 +96,9 @@ class AudioClassification(object):
         if self.classifier == 'lsvm':
             clf = sklearn.svm.LinearSVC()
         elif self.classifier == 'ksvm':
-            clf = sklearn.svm.SVC(kernel='sigmoid', gamma='auto')
+            clf = sklearn.svm.SVC(kernel='rbf', gamma='scale')
+            # kernel: ‘linear’, ‘poly’, ‘rbf’, ‘sigmoid’, ‘precomputed’
+            # gamma: 'auto' 'scale'
         elif self.classifier == 'dctree':
             clf = sklearn.tree.DecisionTreeClassifier()
         elif self.classifier == 'sgd':
@@ -130,17 +132,18 @@ class AudioClassification(object):
         return accuracy
 
     def test(self):
+
         predict_code = []
-        for idx in range(self.M):
+        for idx in range(self.M):  # 经过每个分类器，然后预测对应的类别，组成ECOC码
             cls = self.clsfier_list[idx]
             pdct = cls.predict(self.val_set[:, :-1])
             predict_code.append(pdct)
 
         predict_code = np.vstack(predict_code).transpose()  # N * M
-        accuracy = np.hstack(self.accuracy_list)
+        accuracy = np.hstack(self.accuracy_list)  # TODO 不确定度？
 
         # give real code
-        real_code = self.codebook.copy()
+        real_code = self.code_book.copy()
         cls = np.zeros(self.val_set.shape[0])
         for i, pdct in enumerate(predict_code):  # pdct: 1 * M
             dis = np.sum(np.abs(real_code - pdct) * accuracy, axis=1)
@@ -173,10 +176,10 @@ if __name__ == '__main__':
     np.random.seed(4)
     data_dir = "C:\\Users\\wsy\\Desktop\\data_set"
     save_dir = "C:\\Users\\wsy\\Desktop\\data_set\\20_85.npy"
-    AC = AudioClassification('ada_boost', data_dir, save_dir,
-                             num_clsfiers=25,
-                             feature_length=25,
-                             frame_per_second=80,
-                             if_loaded=True)
+    AC = AudioClassification('dctree', data_dir, save_dir,
+                             num_clsfiers=80,
+                             feature_length=0,
+                             frame_per_second=82,
+                             if_loaded=False)
     AC.trainer()
     AC.test()

@@ -17,11 +17,11 @@ class AudioProcessor:
 
     def __init__(self, frame_per_second, feature_length: int, path):
         self.frame_per_second = frame_per_second
-        self.audio_data, self.sr = lb.load(path, sr=None)
+        self.audio_data, self.sr = lb.load(path, sr=None)  # sr 是采样率 sample rate
         self.num_origin = len(self.audio_data)  # 总样本数
         self.num_per_frame = int(self.sr / self.frame_per_second)  # 每帧的样本数，窗长
-        self.kernel_size = self.num_per_frame
-        self.stride = int((self.sr - self.num_per_frame + 1) // self.frame_per_second)
+        self.kernel_size = self.num_per_frame  # 核的大小，即每帧的长度
+        self.stride = int((self.sr - self.num_per_frame + 1) // self.frame_per_second)  # 步长
         self.num_frame = int((self.num_origin - self.num_per_frame + 1) // self.stride)  # 剪后总帧数
         self.feature_length = int(feature_length)
         self.eps = 1e-5
@@ -78,6 +78,17 @@ class AudioProcessor:
         kernel = kernel ** 2 / self.kernel_size
         energy_data = self._conv1D(kernel, data ** 2)
         return energy_data
+
+    def get_upper_rate(self, data):
+        '''
+        梯度大于零部分与全部的比值
+        :param data:
+        :return:
+        '''
+        dif = np.diff(data)
+        up_zero = np.sum((dif > 0) * 1.0)
+        return up_zero / len(data)
+
 
     def get_boundary_for_multiple_imput(self, data, avg_zero, energy, low_gate=0.08, high_gate=0.25, lmda=0.8):
         """
@@ -158,7 +169,7 @@ class AudioProcessor:
 
     def _coalesce_boundary_for_multiple(self, boundary, min_length = 20, strict=True):
         """
-        合并距离较近的边界
+        多词情况，合并距离较近的边界
         :param boundary:
         :param min_length:
         :return:
@@ -183,7 +194,7 @@ class AudioProcessor:
 
     def _coalesce_boundary(self, boundary, min_length = 20, strict=True):
         """
-        合并边界
+        单词情况，合并边界
         :param boundary:
         :param min_length:
         :return:
@@ -193,7 +204,7 @@ class AudioProcessor:
 
     def sum_per_frame_(self):
         """
-        summery value to frames without stride
+        简单的加和， stride == kernel 的卷积
         :return:
         """
 
@@ -261,10 +272,32 @@ class AudioProcessor:
         feature = np.hstack([square_feature, hanning_feature])
         return feature
 
+    def get_cropped_feature_v2(self):
+        square_kernel = self.get_window(method='square')
+        hanning_kernel = self.get_window(method='hanning')
+        square_data = self._conv1D(square_kernel, self.audio_data)
+        hanning_data = self._conv1D(hanning_kernel, self.audio_data)
+        square_azrate = self.get_avg_zero_rate(self.audio_data, square_kernel)
+        hanning_azrate = self.get_avg_zero_rate(self.audio_data, hanning_kernel)
+        square_energy = self.get_energy(self.audio_data, square_kernel)
+        hanning_energy = self.get_energy(self.audio_data, hanning_kernel)
+        func = lambda x: [np.max(x), np.std(x), np.mean(x)]
+        upper_rate = self.get_upper_rate(square_energy)
+        feature = np.hstack([
+            func(square_energy),
+            func(hanning_energy),
+            func(square_azrate),
+            func(hanning_azrate),
+            func(square_data),
+            func(hanning_data),
+            [upper_rate]
+        ])
+        return feature
+
 
 if __name__ == "__main__":
     # path = "C:\\Users\\wsy\\Documents\\Audio\\录音 (5).m4a"
-    path = "C:\\Users\\wsy\\Desktop\\data_set_z71\\7\\9.wav"
+    path = "C:\\Users\\wsy\\Desktop\\data_set\\7\\7-9.wav"
     # audio, sr = lb.load(path, sr=None)
     AP = AudioProcessor(feature_length=30,
                         frame_per_second=60,
@@ -276,7 +309,7 @@ if __name__ == "__main__":
     energy = AP.get_energy(origin, kernel)
     crp_data, boundary = AP.get_boundary(audio, avg_zero_rate, energy)
 
-    features = AP.get_feature()
+    features = AP.get_cropped_feature_v2()
 
     # visualize
     plt.figure(1)
