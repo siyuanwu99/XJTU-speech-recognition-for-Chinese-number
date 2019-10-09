@@ -4,36 +4,6 @@ import os
 import json
 from read_audio import AudioProcessor
 
-
-# def generate_labels():
-#     """
-#     give labels for multiple classification
-#     :return:
-#     """
-#     label_1 = [0, 0, 0, 0, 0, 1, 1, 1, 1, 1]  # >= 5
-#     label_2 = [0, 1, 0, 1, 0, 1, 0, 1, 0, 1]  # odd or even
-#     label_3 = [0, 0, 1, 1, 1, 1, 1, 0, 0, 0]  # >= 3 <= 7
-#     label_4 = [1, 1, 0, 0, 1, 1, 0, 0, 0, 1]  # randomly
-#
-#     label = np.vstack([label_1, label_2, label_3, label_4]).transpose()
-#
-#     return label
-
-
-# def load_sigle_data(path, frame_per_second=100, feature_length=20):
-#     """
-#     load data from a file
-#     :param path:
-#     :param frame_per_second:
-#     :return:
-#     """
-#     AP = AudioProcessor(frame_per_second, feature_length, path)
-#     # origin = AP.audio_data
-#     features = AP.get_feature()
-#     if features == []:
-#         return []
-#     return features
-
 NUM = 10
 
 
@@ -78,9 +48,9 @@ def data_loader(data_dir, frame_per_second=100, feature_length=20):
         # find file with label idx
 
         # for data dir label -> person
-        data_path = os.path.join(data_dir, '*', '{}.*'.format(idx))
+        # data_path = os.path.join(data_dir, '*', '{}.*'.format(idx))
         # for data dir person -> label
-        # data_path = os.path.join(data_dir, str(idx), '*')
+        data_path = os.path.join(data_dir, str(idx), '*')
 
         file_list = glob.glob(data_path)
         features_list = []
@@ -88,7 +58,7 @@ def data_loader(data_dir, frame_per_second=100, feature_length=20):
         # get audio data from file
         for file_path in file_list:
             A = AudioProcessor(frame_per_second, feature_length, file_path)
-            features = A.get_feature()
+            features = A.get_cropped_feature()
             if features == [] or len(features) < 6 * feature_length:
                 print("extract error occurred in {}".format(file_path))
                 continue
@@ -107,10 +77,12 @@ if __name__ == '__main__':
     
     np.random.seed(5)
     data_dir = "C:\\Users\\wsy\\Desktop\\data_set"
-    save_dir = "C:\\Users\\wsy\\Desktop"
-    data_base = data_loader(data_dir)
+    save_dir = "C:\\Users\\wsy\\Desktop\\data_set"
+    data_base = data_loader(data_dir, feature_length=30)
     # save_file(data_base, save_dir)
     np.save(os.path.join(save_dir, 'data.npy'), np.vstack(data_base))
+    print("Successfully generated data.npy")
     print(len(data_base))
-    print(len(data_base[5]))
+    for i, data_list in enumerate(data_base):
+        print(str(i), '\t', len(data_list))
 

@@ -7,6 +7,11 @@ import numpy as np
 FRAME_PER_SECOND = 100  # 25ms per frame
 
 
+def norm(input):
+    mean = np.mean(input)
+    std = np.std(input)
+    return (input - mean) / std
+
 class AudioProcessor:
 
     def __init__(self, frame_per_second, feature_length: int, path):
@@ -129,14 +134,17 @@ class AudioProcessor:
         metric = np.max(energy)  # + np.mean(energy)
         high = (energy > high_gate * metric) * 1
         low = 1 - (energy < low_gate * metric)
+        if high[0] > 0 or high[-1] > 0:  # 预防没有录全的情况
+            high[0] = 0
+            high[-1] = 0
+        if low[0] > 0 or low[-1] > 0:
+            low[0] = 0
+            low[-1] = 0
         diff_high = np.diff(high)
         diff_low = np.diff(low)
         if (np.max(np.abs(diff_high)) <= self.eps) or (np.max(np.abs(diff_low)) <= self.eps):
-            return [], []
-        if np.min(diff_high) > -1:  # 没录完
-            diff_high[-1] = -1
-        if np.min(diff_low) > -1:  # 没录完
-            diff_low[-1] = -1
+            return [], []  # 没有录上声音
+
         high_boundary = np.vstack([np.where(diff_high == 1), np.where(diff_high == -1)]).transpose()
         low_boundary = np.vstack([np.where(diff_low == 1), np.where(diff_low == -1)]).transpose()
         if (len(high_boundary) > 1) or (len(low_boundary) > 1):
@@ -227,12 +235,39 @@ class AudioProcessor:
         feature = np.hstack([square_feature, hanning_feature])
         return feature
 
+    def get_cropped_feature(self):
+        """
+        get feature from audio with ten numbers
+        # TODO: this function only include features from 'square' and 'hanning' windows
+        :return:
+        """
+        square_kernel = self.get_window(method='square')
+        hanning_kernel = self.get_window(method='hanning')
+        square_data = norm(self._conv1D(square_kernel, self.audio_data))
+        hanning_data = norm(self._conv1D(hanning_kernel, self.audio_data))
+        square_azrate = norm(self.get_avg_zero_rate(self.audio_data, square_kernel))
+        hanning_azrate = norm(self.get_avg_zero_rate(self.audio_data, hanning_kernel))
+        square_energy = norm(self.get_energy(self.audio_data, square_kernel))
+        hanning_energy = norm(self.get_energy(self.audio_data, hanning_kernel))
+
+        lb = 0
+        square_feature = np.hstack([square_data[lb: lb + self.feature_length],
+                                    square_azrate[lb: lb + self.feature_length],
+                                    square_energy[lb: lb + self.feature_length]])
+        hanning_feature = np.hstack([hanning_data[lb: lb + self.feature_length],
+                                     hanning_azrate[lb: lb + self.feature_length],
+                                     hanning_energy[lb: lb + self.feature_length]])
+        feature = np.hstack([square_feature, hanning_feature])
+        return feature
+
 
 if __name__ == "__main__":
     # path = "C:\\Users\\wsy\\Documents\\Audio\\录音 (5).m4a"
-    path = "C:\\Users\\wsy\\Desktop\\data_set_z71\\3\\2.wav"
+    path = "C:\\Users\\wsy\\Desktop\\data_set_z71\\7\\9.wav"
     # audio, sr = lb.load(path, sr=None)
-    AP = AudioProcessor(FRAME_PER_SECOND, 20, path)
+    AP = AudioProcessor(feature_length=15,
+                        frame_per_second=60,
+                        path=path)
     origin = AP.audio_data
     kernel = AP.get_window(method='square')
     audio = AP._conv1D(kernel, origin)

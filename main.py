@@ -9,17 +9,19 @@ NUM = 10
 
 
 class AudioClassification(object):
-    def __init__(self, classifier, data_dir, save_dir, num_clsfiers=20):
+    def __init__(self, classifier, data_dir, save_dir, num_clsfiers=20,
+                 feature_length=20, frame_per_second=100):
 
         self.N = NUM  # number of classes
         self.M = num_clsfiers  # number of classifiers
         self.classifier = classifier  # name of classifier
         if os.path.exists(os.path.join(save_dir, 'data.npy')):
             data_base = np.load(os.path.join(save_dir, 'data.npy'))
+            print("Using saved data base")
         else:
             data_base = data_loader.data_loader(data_dir,
-                                                feature_length=10,
-                                                frame_per_second=100)  # list of numpy
+                                                feature_length=feature_length,
+                                                frame_per_second=frame_per_second)  # list of numpy
         data_base = np.vstack(data_base)
         np.random.shuffle(data_base)
         # num_validation = int(0.1 * len(data_base))
@@ -41,13 +43,13 @@ class AudioClassification(object):
             # train classifier
             clsfier = self.train_a_classifier(self.train_set[:, :-1], Y, num=1)
             self.clsfier_list.append(clsfier)
-            tt = time.time()
             print('-'*5 + 'Trained classifier {}'.format(idx) + '-'*5)
-            print('Time elapsed {} seconds'.format(tt - ti))
 
             # validate
             val = self._find_code(self.val_set, positive_label, negative_label)
             self._validate(clsfier, self.val_set, val)
+            tt = time.time()
+            print('Time elapsed {} seconds'.format(tt - ti))
 
     def _find_code(self, input_data, positive, negative):
         Y = np.zeros([input_data.shape[0], 1])
@@ -70,15 +72,16 @@ class AudioClassification(object):
         :param label:
         :return:
         '''
-        # if self.classifier == 'svm':
-        #     clsfier = svm.LinearSVC()
-        #     clsfier.fit(data, label)
-        # elif self.classifier == 'decision_tree':
-        #
-        #     print("ERROR")
-        clsfier = svm.SVC(kernel='rbf')
+        if self.classifier == 'lsvm':
+            clsfier = svm.LinearSVC()
+        elif self.classifier == 'ksvm':
+            clsfier = svm.SVC(kernel='sigmoid', gamma='auto')
+        elif self.classifier == 'decision_tree':
+            clsfier = []
+            assert 0, "ERROR"
+
         for i in range(num):
-            clsfier.fit(data, label)
+            clsfier.fit(data, label.squeeze())
         return clsfier
 
     def _validate(self, classifier, X, Y):
@@ -118,18 +121,21 @@ class AudioClassification(object):
         for idx in range(self.M):
             code_line = np.ones(self.N).astype(np.int)
             y_label = np.arange(self.N)
-            choice = np.random.choice(y_label, int(self.N // 2 - 1))
+            choice = np.random.choice(y_label, int(self.N // 2 - 1), replace=False)
             code_line[choice] *= -1
             code_book.append(code_line)
         code_book_np = np.vstack(code_book).transpose()
+        print(code_book_np.transpose())
         return code_book_np
 
 
-
 if __name__ == '__main__':
-    np.random.seed(5)
-    data_dir = "C:\\Users\\wsy\\Desktop\\data_set_z71"
-    save_dir = "C:\\Users\\wsy\\Desktop"
-    AC = AudioClassification('svm', data_dir, save_dir)
+    np.random.seed(4)
+    data_dir = "C:\\Users\\wsy\\Desktop\\data_set"
+    save_dir = "C:\\Users\\wsy\\Desktop\\data_set"
+    AC = AudioClassification('ksvm', data_dir, save_dir,
+                             num_clsfiers=15,
+                             feature_length=15,
+                             frame_per_second=80)
     AC.trainer()
     AC.test()
