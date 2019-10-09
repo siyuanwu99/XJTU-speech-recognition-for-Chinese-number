@@ -2,7 +2,7 @@ import numpy as np
 import glob
 import os
 import json
-from read_audio import AudioProcessor
+from audio_processor import AudioProcessor
 
 NUM = 10
 
@@ -52,7 +52,7 @@ def data_loader(data_dir, frame_per_second=100, feature_length=20):
         # for data dir person -> label
         data_path = os.path.join(data_dir, str(idx), '*')
 
-        file_list = glob.glob(data_path)
+        file_list = glob.glob(data_path)  # 所有文件名列表
         features_list = []
 
         # get audio data from file
