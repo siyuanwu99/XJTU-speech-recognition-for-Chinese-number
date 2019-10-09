@@ -12,6 +12,7 @@ def norm(input):
     std = np.std(input)
     return (input - mean) / std
 
+
 class AudioProcessor:
 
     def __init__(self, frame_per_second, feature_length: int, path):
@@ -265,7 +266,7 @@ if __name__ == "__main__":
     # path = "C:\\Users\\wsy\\Documents\\Audio\\录音 (5).m4a"
     path = "C:\\Users\\wsy\\Desktop\\data_set_z71\\7\\9.wav"
     # audio, sr = lb.load(path, sr=None)
-    AP = AudioProcessor(feature_length=15,
+    AP = AudioProcessor(feature_length=30,
                         frame_per_second=60,
                         path=path)
     origin = AP.audio_data

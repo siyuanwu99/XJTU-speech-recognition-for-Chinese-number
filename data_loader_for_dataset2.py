@@ -70,6 +70,10 @@ def data_loader(data_dir, frame_per_second=100, feature_length=20):
         data = np.hstack([features, labels])
         data_set.append(data)
         print("Loaded feature {}".format(idx))
+
+    print('\n' + '-'*5 + 'NUM OF DATASET' + '-'*5 + '\n')
+    for i, data_list in enumerate(data_set):
+        print(str(i), '\t', len(data_list))
     return data_set
 
 
@@ -78,11 +82,10 @@ if __name__ == '__main__':
     np.random.seed(5)
     data_dir = "C:\\Users\\wsy\\Desktop\\data_set"
     save_dir = "C:\\Users\\wsy\\Desktop\\data_set"
-    data_base = data_loader(data_dir, feature_length=30)
+    data_base = data_loader(data_dir,
+                            feature_length=20,
+                            frame_per_second=85)
     # save_file(data_base, save_dir)
     np.save(os.path.join(save_dir, 'data.npy'), np.vstack(data_base))
     print("Successfully generated data.npy")
-    print(len(data_base))
-    for i, data_list in enumerate(data_base):
-        print(str(i), '\t', len(data_list))
 

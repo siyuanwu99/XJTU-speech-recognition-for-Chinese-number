@@ -1,7 +1,7 @@
-import data_loader
+import data_loader_for_dataset2 as data_loader
 import read_audio
 import numpy as np
-from sklearn import svm
+import sklearn
 import os
 import time
 
@@ -9,14 +9,14 @@ NUM = 10
 
 
 class AudioClassification(object):
-    def __init__(self, classifier, data_dir, save_dir, num_clsfiers=20,
-                 feature_length=20, frame_per_second=100):
+    def __init__(self, classifier, data_dir, save_path, num_clsfiers=20,
+                 feature_length=20, frame_per_second=100, if_loaded=False):
 
         self.N = NUM  # number of classes
         self.M = num_clsfiers  # number of classifiers
         self.classifier = classifier  # name of classifier
-        if os.path.exists(os.path.join(save_dir, 'data.npy')):
-            data_base = np.load(os.path.join(save_dir, 'data.npy'))
+        if os.path.exists(os.path.join(save_path)) and if_loaded:
+            data_base = np.load(os.path.join(save_path))
             print("Using saved data base")
         else:
             data_base = data_loader.data_loader(data_dir,
@@ -30,6 +30,7 @@ class AudioClassification(object):
         self.val_set = data_base[self.num_train_set:]
         self.code_book = self.get_class_codebook()
         self.clsfier_list = []
+        self.accuracy_list = []
 
     def trainer(self):
 
@@ -47,9 +48,10 @@ class AudioClassification(object):
 
             # validate
             val = self._find_code(self.val_set, positive_label, negative_label)
-            self._validate(clsfier, self.val_set, val)
+            accuracy = self._validate(clsfier, self.val_set, val)
+            self.accuracy_list.append(accuracy)
             tt = time.time()
-            print('Time elapsed {} seconds'.format(tt - ti))
+            print('\t\ttime elapsed {:.2f} seconds'.format(tt - ti))
 
     def _find_code(self, input_data, positive, negative):
         Y = np.zeros([input_data.shape[0], 1])
@@ -73,10 +75,15 @@ class AudioClassification(object):
         :return:
         '''
         if self.classifier == 'lsvm':
-            clsfier = svm.LinearSVC()
+            clsfier = sklearn.svm.LinearSVC()
         elif self.classifier == 'ksvm':
-            clsfier = svm.SVC(kernel='sigmoid', gamma='auto')
-        elif self.classifier == 'decision_tree':
+            clsfier = sklearn.svm.SVC(kernel='sigmoid', gamma='auto')
+        elif self.classifier == 'dctree':
+            clsfier = sklearn.tree.DecisionTreeClassifier()
+        elif self.classifier == 'sgd':
+            clsfier = sklearn.linear_model.SGDClassifier(
+                loss="modified_huber", penalty="l2")
+        else:
             clsfier = []
             assert 0, "ERROR"
 
@@ -85,12 +92,19 @@ class AudioClassification(object):
         return clsfier
 
     def _validate(self, classifier, X, Y):
+        """
+        validate the classifier
+        :param classifier:
+        :param X:
+        :param Y:
+        :return:
+        """
         predict = classifier.predict(X[:, :-1])
         error = np.abs(predict - Y.squeeze())
-        accuracy = np.sum(error) / len(error) * 0.5
+        accuracy = 1 - np.count_nonzero(error) / len(error)
 
-        print("Validation: accuracy = {}".format(accuracy))
-        return
+        print("Validation: accuracy = {:.6f}".format(accuracy))
+        return accuracy
 
     def test(self):
         codebook = self.code_book.copy()
@@ -101,19 +115,20 @@ class AudioClassification(object):
             predict_code.append(pdct)
 
         predict_code = np.vstack(predict_code).transpose()  # N * M
+        accuracy = np.hstack(self.accuracy_list)
 
         # give real code
         real_code = codebook.copy()
         cls = np.zeros(self.val_set.shape[0])
         for i, pdct in enumerate(predict_code):  # pdct: 1 * M
-            dis = np.linalg.norm(real_code - pdct, axis=1)  #
-            cls[i] = np.argmax(dis)
-        print("Predict:\t\t", cls)
-        print("Ground Truth:\t", self.val_set[:, -1])
+            dis = np.sum(np.abs(real_code - pdct) * accuracy, axis=1)  #
+            cls[i] = np.argmin(dis)
+        print("Predict:\n", cls)
+        print("Ground Truth:\n", self.val_set[:, -1])
         result = (cls - self.val_set[:, -1]).astype(np.int64)
-        print(result)
+        print("Error\n", result)
         accuracy = 1 - np.count_nonzero(result) / len(result)
-        print("ACCURACY:", accuracy)
+        print("ACCURACY: {:.6f}".format(accuracy))
         return accuracy
 
     def get_class_codebook(self):
@@ -121,10 +136,11 @@ class AudioClassification(object):
         for idx in range(self.M):
             code_line = np.ones(self.N).astype(np.int)
             y_label = np.arange(self.N)
-            choice = np.random.choice(y_label, int(self.N // 2 - 1), replace=False)
+            choice = np.random.choice(y_label, int(self.N // 2), replace=False)
             code_line[choice] *= -1
             code_book.append(code_line)
         code_book_np = np.vstack(code_book).transpose()
+        print('\n' + '-' * 5 + 'CODEBOOK' + '-' * 5 + '\n')
         print(code_book_np.transpose())
         return code_book_np
 
@@ -132,10 +148,11 @@ class AudioClassification(object):
 if __name__ == '__main__':
     np.random.seed(4)
     data_dir = "C:\\Users\\wsy\\Desktop\\data_set"
-    save_dir = "C:\\Users\\wsy\\Desktop\\data_set"
-    AC = AudioClassification('ksvm', data_dir, save_dir,
-                             num_clsfiers=15,
-                             feature_length=15,
-                             frame_per_second=80)
+    save_dir = "C:\\Users\\wsy\\Desktop\\data_set\\20_85.npy"
+    AC = AudioClassification('sgd', data_dir, save_dir,
+                             num_clsfiers=25,
+                             feature_length=25,
+                             frame_per_second=80,
+                             if_loaded=True)
     AC.trainer()
     AC.test()
