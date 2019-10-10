@@ -89,7 +89,6 @@ class AudioProcessor:
         up_zero = np.sum((dif > 0) * 1.0)
         return up_zero / len(data)
 
-
     def get_boundary_for_multiple_imput(self, data, avg_zero, energy, low_gate=0.08, high_gate=0.25, lmda=0.8):
         """
         对同文件多词获取边界/裁剪数据

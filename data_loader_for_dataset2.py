@@ -83,8 +83,8 @@ if __name__ == '__main__':
     data_dir = "C:\\Users\\wsy\\Desktop\\data_set"
     save_dir = "C:\\Users\\wsy\\Desktop\\data_set"
     data_base = data_loader(data_dir,
-                            feature_length=20,
-                            frame_per_second=85)
+                            feature_length=0,
+                            frame_per_second=82)
     # save_file(data_base, save_dir)
     np.save(os.path.join(save_dir, 'data.npy'), np.vstack(data_base))
     print("Successfully generated data.npy")
