@@ -1,5 +1,6 @@
 import data_loader_for_dataset2 as data_loader
 import audio_processor
+from sklearn.multiclass import OutputCodeClassifier
 import numpy as np
 import sklearn
 import os
@@ -113,10 +114,11 @@ class AudioClassification(object):
             accuracy[idx] = 0
         best_label = best_label.astype(np.int64)
         accuracy = np.hstack(self.accuracy_list)[best_label]
+        print('' * 20 + '\n')
         print('Select {}'.format(np.vstack([best_label, accuracy])))
 
         codebook = self.code_book[:, best_label.astype(np.int64)]
-
+        print(codebook)
         predict_code = self._get_predict_code(best_clf_list)
         predict_code = np.vstack(predict_code).transpose()
         cls = np.zeros(self.test_set.shape[0])
@@ -257,20 +259,34 @@ class AudioClassification(object):
             code_line[choice] *= -1
             code_book.append(code_line)
         code_book_np = np.vstack(code_book).transpose()
-        print('\n' + '-' * 5 + 'CODEBOOK' + '-' * 5 + '\n')
+        # code_book_np = np.array([
+        #     [1,1,0,0,0,0,1,0,1,0,0,1,1,0,1],
+        #     [0,0,1,1,1,1,0,1,0,1,1,0,0,1,0],
+        #     [1,0,0,1,0,0,0,1,1,1,1,0,1,0,1],
+        #     [0,0,1,1,0,1,1,1,0,0,0,0,1,0,1],
+        #     [1,1,1,0,1,0,1,1,0,0,1,0,0,0,1],
+        #     [0,1,0,0,1,1,0,1,1,1,0,0,0,0,1],
+        #     [1,0,1,1,1,0,0,0,0,1,0,1,0,0,1],
+        #     [0,0,0,1,1,1,1,0,1,0,1,1,0,0,1],
+        #     [1,1,0,1,0,1,1,0,0,1,0,0,0,1,1],
+        #     [0,1,1,1,0,0,0,0,1,0,1,0,0,1,1]
+        # ])
+        # code_book_np = code_book_np * 2 - 1
+        print('\n' + '-' * 5 + 'CODEBOOK' + '-' * 5 + '\yn')
         print(code_book_np.transpose())
         return code_book_np
 
 
 if __name__ == '__main__':
-    np.random.seed(6)
+    np.random.seed(4)
     data_dir = "C:\\Users\\wsy\\Desktop\\data_set"
     save_dir = "C:\\Users\\wsy\\Desktop\\data_set\\0_85.npy"
     AC = AudioClassification('dctree', data_dir, save_dir,
-                             num_clsfiers=60,
+                             num_clsfiers=100,
                              feature_length=0,
-                             frame_per_second=82,
-                             if_loaded=True)
+                             frame_per_second=81,
+                             if_loaded=False)
     # AC.trainer_multi_classifier()
     AC.trainer_ecoc()
-    AC.reinforced_trainer(10)
+    # AC.test()
+    AC.reinforced_trainer(19)
