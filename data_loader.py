@@ -2,7 +2,8 @@ import numpy as np
 import glob
 import os
 import json
-from read_audio import AudioProcessor
+from audio_processor import AudioProcessor
+from utils import save_data
 
 
 # def generate_labels():
@@ -78,7 +79,7 @@ def data_loader(data_dir, frame_per_second=100, feature_length=20):
         # find file with label idx
 
         # for data dir label -> person
-        data_path = os.path.join(data_dir, '*', '{}.*'.format(idx))
+        data_path = os.path.join(data_dir, '*', '{}'.format(idx), '*.wav')
         # for data dir person -> label
         # data_path = os.path.join(data_dir, str(idx), '*')
 
@@ -88,8 +89,8 @@ def data_loader(data_dir, frame_per_second=100, feature_length=20):
         # get audio data from file
         for file_path in file_list:
             A = AudioProcessor(frame_per_second, feature_length, file_path)
-            features = A.get_feature()
-            if features == [] or len(features) < 6 * feature_length:
+            features = A.get_global_feature(iscropped=False)
+            if features == []:
                 print("extract error occurred in {}".format(file_path))
                 continue
             features_list.append(features)
@@ -106,11 +107,12 @@ def data_loader(data_dir, frame_per_second=100, feature_length=20):
 if __name__ == '__main__':
     
     np.random.seed(5)
-    data_dir = "C:\\Users\\wsy\\Desktop\\data_set"
-    save_dir = "C:\\Users\\wsy\\Desktop"
+    data_dir = "C:\\Users\\wsy\\Desktop\\dataset3"
+    save_dir = "C:\\Users\\wsy\\Desktop\\dataset3"
     data_base = data_loader(data_dir)
     # save_file(data_base, save_dir)
-    np.save(os.path.join(save_dir, 'data.npy'), np.vstack(data_base))
+    save_data(save_dir, data_base)
+    # np.save(os.path.join(save_dir, 'data.npy'), np.vstack(data_base))
     print(len(data_base))
     print(len(data_base[5]))
 

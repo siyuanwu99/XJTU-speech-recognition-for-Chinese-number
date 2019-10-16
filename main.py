@@ -1,5 +1,7 @@
-import data_loader_for_dataset2 as data_loader
+# import data_loader_for_dataset2 as data_loader
+import data_loader as data_loader
 import audio_processor
+from utils import *
 from sklearn.multiclass import OutputCodeClassifier
 import numpy as np
 import sklearn
@@ -30,11 +32,11 @@ class AudioClassification(object):
         # dataloader: list of numpy
         data_base = np.vstack(data_base)
         np.random.shuffle(data_base)
-
+        print('\nNumber of Database: {}\n'.format(len(data_base)))
         # 划分数据集
         # num_validation = int(0.1 * len(data_base))
         self.num_train_set = int(0.85 * len(data_base))
-        num_test_set = int(0.95 * len(data_base))
+        num_test_set = int(0.90 * len(data_base))
         self.train_set = data_base[0:self.num_train_set]
         self.train_set_val = data_base[0: 50]  # 参与训练，就是看下分类器效果
         self.val_set = data_base[self.num_train_set:num_test_set]
@@ -76,9 +78,11 @@ class AudioClassification(object):
         """
 
         ti = time.time()
+
         # train classifier
-        self.clsfier = sklearn.tree.DecisionTreeClassifier()
-        # self.clsfier = sklearn.svm.SVC(decision_function_shape='ovo')
+        # self.clsfier = sklearn.svm.SVC()
+
+        self.clsfier = sklearn.svm.SVC(decision_function_shape='ovo')
         self.clsfier.fit(self.train_set[:, :-1], self.train_set[:, -1])
         self.clsfier_list.append(self.clsfier)
         print('\n' + '-'*5 + ' Trained classifier {} '.format(0) + '-'*5)
@@ -96,9 +100,9 @@ class AudioClassification(object):
         tt = time.time()
         print('\t\ttime elapsed {:.2f} seconds'.format(tt - ti))
 
-        self.test_v2(self.val_set[:, :-1], self.val_set[:, -1])
+        self.test_v2(self.test_set[:, :-1], self.test_set[:, -1])
 
-    def reinforced_trainer(self, num_selected_classifiers):
+    def trainer_reinforced(self, num_selected_classifiers):
         '''
         Using best num_selected_classifiers to regenerate the model
         :return:
@@ -168,9 +172,9 @@ class AudioClassification(object):
         :return:
         '''
         if self.classifier == 'lsvm':
-            clf = sklearn.svm.LinearSVC(max_iter=50000)
+            clf = sklearn.svm.LinearSVC()
         elif self.classifier == 'ksvm':
-            clf = sklearn.svm.SVC(kernel='sigmoid', gamma='scale', max_iter=50000)
+            clf = sklearn.svm.SVC(kernel='sigmoid', gamma='scale')
             # kernel: ‘linear’, ‘poly’, ‘rbf’, ‘sigmoid’, ‘precomputed’
             # gamma: 'auto' 'scale'
         elif self.classifier == 'dctree':
@@ -225,7 +229,8 @@ class AudioClassification(object):
             dis = np.sum(np.abs(real_code - pdct) * accuracy, axis=1)
             cls[i] = np.argmin(dis)  # 每个分类器的准确率有不同的权重
 
-        self._print_val(cls)
+        error = self._print_val(cls)
+        self.whats_wrong(cls, self.test_set[:, -1], error)
 
     def _print_val(self, cls):
         print('\n' + '-' * 20 + '\nMethod: \t', self.classifier)
@@ -235,7 +240,9 @@ class AudioClassification(object):
         print("Error\n", result)
         accuracy = 1 - np.count_nonzero(result) / len(result)
         print("ACCURACY: {:.6f}".format(accuracy))
-        return accuracy
+        print('Confusion Matrix')
+        print(sklearn.metrics.confusion_matrix(self.test_set[:, -1], cls))
+        return result
 
     def test_v2(self, data, label):
 
@@ -244,10 +251,16 @@ class AudioClassification(object):
         print('\n' + '-' * 20 + '\nMethod: \t', self.classifier)
         print("Predict:\n", predict_code)
         print("Ground Truth:\n", label)
+        print(len(predict_code))
         result = (predict_code - label).astype(np.int64)
         print("Error\n", result)
         accuracy = 1 - np.count_nonzero(result) / len(result)
         print("ACCURACY: {:.6f}".format(accuracy))
+        print('Confusion Matrix')
+        self._confusion_matrix(predict_code)
+        # print(sklearn.metrics.confusion_matrix(self.test_set[:, -1],
+        #                                        predict_code))
+        # self.whats_wrong(predict_code, label, result)
         return accuracy
 
     def get_class_codebook(self):
@@ -259,34 +272,42 @@ class AudioClassification(object):
             code_line[choice] *= -1
             code_book.append(code_line)
         code_book_np = np.vstack(code_book).transpose()
-        # code_book_np = np.array([
-        #     [1,1,0,0,0,0,1,0,1,0,0,1,1,0,1],
-        #     [0,0,1,1,1,1,0,1,0,1,1,0,0,1,0],
-        #     [1,0,0,1,0,0,0,1,1,1,1,0,1,0,1],
-        #     [0,0,1,1,0,1,1,1,0,0,0,0,1,0,1],
-        #     [1,1,1,0,1,0,1,1,0,0,1,0,0,0,1],
-        #     [0,1,0,0,1,1,0,1,1,1,0,0,0,0,1],
-        #     [1,0,1,1,1,0,0,0,0,1,0,1,0,0,1],
-        #     [0,0,0,1,1,1,1,0,1,0,1,1,0,0,1],
-        #     [1,1,0,1,0,1,1,0,0,1,0,0,0,1,1],
-        #     [0,1,1,1,0,0,0,0,1,0,1,0,0,1,1]
-        # ])
-        # code_book_np = code_book_np * 2 - 1
-        print('\n' + '-' * 5 + 'CODEBOOK' + '-' * 5 + '\yn')
+        print('\n' + '-' * 5 + 'CODEBOOK' + '-' * 5 + '\n')
         print(code_book_np.transpose())
         return code_book_np
+
+    def whats_wrong(self, predict, ground_truth, error):
+        index = np.nonzero(error)
+        array = np.vstack([ground_truth, predict, error]).transpose()
+        array = array[index]
+        array = array[np.argsort(array, 0)[:, 0], :-1]
+        print('\n' + '-' * 20 + '\n' + 'Error Display')
+        print('gt' + '\t' + 'pd')
+        # for i, eor in enumerate(error):
+        #     if abs(eor) > 1e-5:
+        #         print(predict[i], '\t-->\t\t', ground_truth[i])
+        print(array)
+        print('gt' + '\t' + 'pd')
+        print(array[np.argsort(array, 0)[:, 1]])
+        print('-' * 5)
+
+    def _confusion_matrix(self, pred):
+        class_names = np.arange(10)
+        plot_confusion_matrix(self.test_set[:, -1], pred,
+                              classes=class_names, normalize=True,
+                              title='Normalized confusion matrix')
 
 
 if __name__ == '__main__':
     np.random.seed(4)
-    data_dir = "C:\\Users\\wsy\\Desktop\\data_set"
-    save_dir = "C:\\Users\\wsy\\Desktop\\data_set\\0_85.npy"
+    data_dir = "C:\\Users\\wsy\\Desktop\\dataset3"
+    save_dir = "C:\\Users\\wsy\\Desktop\\dataset3\\data.npy"
     AC = AudioClassification('dctree', data_dir, save_dir,
-                             num_clsfiers=100,
+                             num_clsfiers=40,
                              feature_length=0,
-                             frame_per_second=81,
-                             if_loaded=False)
-    # AC.trainer_multi_classifier()
-    AC.trainer_ecoc()
+                             frame_per_second=80,
+                             if_loaded=True)
+    AC.trainer_multi_classifier()
+    # AC.trainer_ecoc()
     # AC.test()
-    AC.reinforced_trainer(19)
+    # AC.trainer_reinforced(19)

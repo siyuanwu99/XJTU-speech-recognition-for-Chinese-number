@@ -1,67 +1,24 @@
 import numpy as np
-import librosa.display as lbdis
 import matplotlib.pyplot as plt
-from audio_processor import AudioProcessor
-import os
 
+from sklearn import svm, datasets
+from sklearn.model_selection import train_test_split
 from sklearn.metrics import confusion_matrix
 from sklearn.utils.multiclass import unique_labels
 
+# import some data to play with
+iris = datasets.load_iris()
+X = iris.data
+y = iris.target
+class_names = iris.target_names
 
-def save_data(save_dir, data, fname='data.npy'):
-    np.save(os.path.join(save_dir, fname), np.vstack(data))
-    print("Data has been saved to {:s}/{:s}".format(save_dir, fname))
+# Split the data into a training set and a test set
+X_train, X_test, y_train, y_test = train_test_split(X, y, random_state=0)
 
-
-def visualize_waves(path, frame_per_second):
-    AP = AudioProcessor(feature_length=30,
-                        frame_per_second=frame_per_second,
-                        path=path)
-    origin = AP.audio_data
-    kernel = AP.get_window(method='square')
-    audio = AP._conv1D(kernel, origin)
-    avg_zero_rate = AP.get_avg_zero_rate(origin, kernel)
-    energy = AP.get_energy(origin, kernel)
-    boundary = AP.get_boundary(energy)
-
-    features = AP.get_global_feature()
-
-    # visualize
-    plt.figure(1)
-    lbdis.waveplot(audio, sr=frame_per_second)
-    plt.title('windowed')
-    plt.show()
-
-    plt.figure(2)
-    lbdis.waveplot(origin, sr=48000)
-    plt.title("origin")
-    plt.show()
-
-    plt.figure(3)
-    lbdis.waveplot(avg_zero_rate, sr=frame_per_second)
-    plt.title('azr')
-    plt.show()
-
-    plt.figure(4)
-    lbdis.waveplot(energy, sr=frame_per_second)
-    plt.title('energy')
-    plt.show()
-
-    plt.figure(5)
-    lbdis.waveplot(audio[boundary[0]:boundary[1] + 1], sr=frame_per_second)
-    plt.title('cropped_avg')
-    plt.show()
-
-    plt.figure(6)
-    lbdis.waveplot(energy[boundary[0]:boundary[1] + 1], sr=frame_per_second)
-    plt.title('cropped energy')
-    plt.show()
-
-    print(len(audio))
-    print("number of features", len(features))
-    print(features[0])
-    features = np.array(features)
-    print(features.shape)
+# Run classifier, using a model that is too regularized (C too low) to see
+# the impact on the results
+classifier = svm.SVC(kernel='linear', C=0.01)
+y_pred = classifier.fit(X_train, y_train).predict(X_test)
 
 
 def plot_confusion_matrix(y_true, y_pred, classes,
@@ -81,14 +38,14 @@ def plot_confusion_matrix(y_true, y_pred, classes,
     # Compute confusion matrix
     cm = confusion_matrix(y_true, y_pred)
     # Only use the labels that appear in the data
-    # classes = classes[unique_labels(y_true, y_pred)]
+    classes = classes[unique_labels(y_true, y_pred)]
     if normalize:
         cm = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
         print("Normalized confusion matrix")
     else:
         print('Confusion matrix, without normalization')
 
-    print(np.floor(cm * 10000)/100)
+    print(cm)
 
     fig, ax = plt.subplots()
     im = ax.imshow(cm, interpolation='nearest', cmap=cmap)
@@ -117,3 +74,16 @@ def plot_confusion_matrix(y_true, y_pred, classes,
     fig.tight_layout()
     plt.show()
     return ax
+
+
+np.set_printoptions(precision=2)
+
+# Plot non-normalized confusion matrix
+plot_confusion_matrix(y_test, y_pred, classes=class_names,
+                      title='Confusion matrix, without normalization')
+
+# Plot normalized confusion matrix
+plot_confusion_matrix(y_test, y_pred, classes=class_names, normalize=True,
+                      title='Normalized confusion matrix')
+
+plt.show()
