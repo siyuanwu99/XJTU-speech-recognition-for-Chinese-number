@@ -109,7 +109,7 @@ if __name__ == '__main__':
     np.random.seed(5)
     data_dir = "C:\\Users\\wsy\\Desktop\\dataset3"
     save_dir = "C:\\Users\\wsy\\Desktop\\dataset3"
-    data_base = data_loader(data_dir)
+    data_base = data_loader(data_dir, frame_per_second=93)
     # save_file(data_base, save_dir)
     save_data(save_dir, data_base)
     # np.save(os.path.join(save_dir, 'data.npy'), np.vstack(data_base))

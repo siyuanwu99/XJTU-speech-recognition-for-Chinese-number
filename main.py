@@ -332,13 +332,13 @@ class AudioClassification(object):
 if __name__ == '__main__':
     np.random.seed(4)
     data_dir = "C:\\Users\\wsy\\Desktop\\dataset3"
-    save_dir = "C:\\Users\\wsy\\Desktop\\dataset3\\data.npy"
+    save_dir = "C:\\Users\\wsy\\Desktop\\dataset3\\data93.npy"
     AC = AudioClassification('dctree', data_dir, save_dir,
-                             num_clsfiers=25,
+                             num_clsfiers=100,
                              feature_length=0,
-                             frame_per_second=70,
-                             if_loaded=False)
+                             frame_per_second=93,
+                             if_loaded=True)
     # AC.trainer_multi_classifier()
     AC.trainer_ecoc()
     AC.test()
-    # AC.trainer_reinforced(25)
+    AC.trainer_reinforced(33)
