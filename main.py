@@ -104,6 +104,7 @@ class AudioClassification(object):
 
     def trainer_reinforced(self, num_selected_classifiers):
         '''
+        使用最优的几个分类器去分类，并测试效果
         Using best num_selected_classifiers to regenerate the model
         :return:
         '''
@@ -198,7 +199,7 @@ class AudioClassification(object):
 
     def _validate(self, classifier, X, Y):
         """
-        validate the classifier
+        使用验证集验证分类器的分类效果
         :param classifier:
         :param X:
         :param Y:
@@ -211,8 +212,13 @@ class AudioClassification(object):
         print("Validation: accuracy = {:.6f}".format(accuracy))
         return accuracy
 
-    def test(self):
-
+    def test(self, ifcfmatrix=False, ifshow=False):
+        '''
+        在测试集上测试分类效果
+        :param ifcfmatrix: 是否需要输出 confusion matrix， 默认不输出
+        :param ifshow: 是否需要输出错误结果， 默认不输出
+        :return:
+        '''
         predict_code = []
         for idx in range(self.M):  # 经过每个分类器，然后预测对应的类别，组成ECOC码
             cls = self.clsfier_list[idx]
@@ -229,19 +235,27 @@ class AudioClassification(object):
             dis = np.sum(np.abs(real_code - pdct) * accuracy, axis=1)
             cls[i] = np.argmin(dis)  # 每个分类器的准确率有不同的权重
 
-        error = self._print_val(cls)
-        self.whats_wrong(cls, self.test_set[:, -1], error)
+        error = self._print_val(cls, if_cfmatrix=ifcfmatrix)
+        if ifshow:
+            self.whats_wrong(cls, self.test_set[:, -1], error)
 
-    def _print_val(self, cls):
+    def _print_val(self, cls, if_cfmatrix=False):
+        '''
+        打印真实值、预测值和正确率
+        :param cls:
+        :param if_cfmatrix:
+        :return:
+        '''
         print('\n' + '-' * 20 + '\nMethod: \t', self.classifier)
         print("Predict:\n", cls)
         print("Ground Truth:\n", self.test_set[:, -1])
         result = (cls - self.test_set[:, -1]).astype(np.int64)
         print("Error\n", result)
         accuracy = 1 - np.count_nonzero(result) / len(result)
-        print("ACCURACY: {:.6f}".format(accuracy))
-        print('Confusion Matrix')
-        print(sklearn.metrics.confusion_matrix(self.test_set[:, -1], cls))
+        print('-'*20 + '\n' + "ACCURACY: {:.6f}".format(accuracy) +
+              '\n' + '-'*20 + '\n')
+        if if_cfmatrix:
+            self._confusion_matrix(cls)
         return result
 
     def test_v2(self, data, label):
@@ -255,7 +269,8 @@ class AudioClassification(object):
         result = (predict_code - label).astype(np.int64)
         print("Error\n", result)
         accuracy = 1 - np.count_nonzero(result) / len(result)
-        print("ACCURACY: {:.6f}".format(accuracy))
+        print('-'*20 + '\n' + "ACCURACY: {:.6f}".format(accuracy) +
+              '\n' + '-'*20 + '\n')
         print('Confusion Matrix')
         self._confusion_matrix(predict_code)
         # print(sklearn.metrics.confusion_matrix(self.test_set[:, -1],
@@ -264,6 +279,10 @@ class AudioClassification(object):
         return accuracy
 
     def get_class_codebook(self):
+        '''
+        获取ECOC码本
+        :return:
+        '''
         code_book = []
         for idx in range(self.M):
             code_line = np.ones(self.N).astype(np.int)
@@ -277,6 +296,13 @@ class AudioClassification(object):
         return code_book_np
 
     def whats_wrong(self, predict, ground_truth, error):
+        '''
+        输出错误的分类结果，并排列
+        :param predict:
+        :param ground_truth:
+        :param error:
+        :return:
+        '''
         index = np.nonzero(error)
         array = np.vstack([ground_truth, predict, error]).transpose()
         array = array[index]
@@ -292,6 +318,11 @@ class AudioClassification(object):
         print('-' * 5)
 
     def _confusion_matrix(self, pred):
+        '''
+        生成 confusion matrix
+        :param pred:
+        :return:
+        '''
         class_names = np.arange(10)
         plot_confusion_matrix(self.test_set[:, -1], pred,
                               classes=class_names, normalize=True,
@@ -303,11 +334,11 @@ if __name__ == '__main__':
     data_dir = "C:\\Users\\wsy\\Desktop\\dataset3"
     save_dir = "C:\\Users\\wsy\\Desktop\\dataset3\\data.npy"
     AC = AudioClassification('dctree', data_dir, save_dir,
-                             num_clsfiers=40,
+                             num_clsfiers=25,
                              feature_length=0,
-                             frame_per_second=80,
-                             if_loaded=True)
-    AC.trainer_multi_classifier()
-    # AC.trainer_ecoc()
-    # AC.test()
-    # AC.trainer_reinforced(19)
+                             frame_per_second=70,
+                             if_loaded=False)
+    # AC.trainer_multi_classifier()
+    AC.trainer_ecoc()
+    AC.test()
+    # AC.trainer_reinforced(25)
