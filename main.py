@@ -15,7 +15,7 @@ NUM = 10
 
 class AudioClassification(object):
     def __init__(self, classifier, data_dir, save_path, num_clsfiers=20,
-                 feature_length=20, frame_per_second=100, if_loaded=False):
+                 frame_per_second=100, if_loaded=False):
 
         self.N = NUM  # 类的数目
         self.M = num_clsfiers  # 分类器的数目
@@ -27,7 +27,6 @@ class AudioClassification(object):
             print("Using saved data base")
         else:
             data_base = data_loader.data_loader(data_dir,
-                                                feature_length=feature_length,
                                                 frame_per_second=frame_per_second)
         # dataloader: list of numpy
         data_base = np.vstack(data_base)
@@ -212,11 +211,11 @@ class AudioClassification(object):
         print("Validation: accuracy = {:.6f}".format(accuracy))
         return accuracy
 
-    def test(self, ifcfmatrix=False, ifshow=False):
+    def test(self, ifcfmatrix=False, if_show_error=False):
         '''
         在测试集上测试分类效果
         :param ifcfmatrix: 是否需要输出 confusion matrix， 默认不输出
-        :param ifshow: 是否需要输出错误结果， 默认不输出
+        :param if_show_error: 是否需要输出错误结果， 默认不输出
         :return:
         '''
         predict_code = []
@@ -236,7 +235,7 @@ class AudioClassification(object):
             cls[i] = np.argmin(dis)  # 每个分类器的准确率有不同的权重
 
         error = self._print_val(cls, if_cfmatrix=ifcfmatrix)
-        if ifshow:
+        if if_show_error:
             self.whats_wrong(cls, self.test_set[:, -1], error)
 
     def _print_val(self, cls, if_cfmatrix=False):
@@ -333,12 +332,15 @@ if __name__ == '__main__':
     np.random.seed(4)
     data_dir = "C:\\Users\\wsy\\Desktop\\dataset3"
     save_dir = "C:\\Users\\wsy\\Desktop\\dataset3\\data93.npy"
-    AC = AudioClassification('dctree', data_dir, save_dir,
-                             num_clsfiers=100,
-                             feature_length=0,
-                             frame_per_second=93,
-                             if_loaded=True)
+    AC = AudioClassification('ksvm', data_dir, save_dir,
+                             num_clsfiers=40,
+                             frame_per_second=100,
+                             if_loaded=False)
     # AC.trainer_multi_classifier()
     AC.trainer_ecoc()
-    AC.test()
-    AC.trainer_reinforced(33)
+    AC.test(ifcfmatrix=True, if_show_error=False)
+    # AC.trainer_reinforced(33)
+
+
+# best at present:
+# nc = 40, fl=0, fps=93

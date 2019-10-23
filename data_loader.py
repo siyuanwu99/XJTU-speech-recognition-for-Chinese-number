@@ -104,14 +104,55 @@ def data_loader(data_dir, frame_per_second=100, feature_length=20):
     return data_set
 
 
+def mfcc_loader(data_dir, frame_per_second, mfcc_cof, mfcc_ord):
+    """
+    load all data from data_dir
+    :param data_dir:
+    :param frame_per_second:
+    :param feature_length:
+    :return: list of array
+    """
+    data_set = []
+    for idx in range(NUM):
+
+        # find file with label idx
+
+        # for data dir label -> person
+        data_path = os.path.join(data_dir, '*', '{}'.format(idx), '*.wav')
+        # for data dir person -> label
+        # data_path = os.path.join(data_dir, str(idx), '*')
+
+        file_list = glob.glob(data_path)
+        features_list = []
+
+        # get audio data from file
+        for file_path in file_list:
+            A = AudioProcessor(frame_per_second, file_path,
+                               mfcc_cof=mfcc_cof, mfcc_order=mfcc_ord)
+            features = A.get_mfcc_feature()
+            if features == []:
+                print("extract error occurred in {}".format(file_path))
+                continue
+            features_list.append(features)
+            print("Loaded feature {}".format(file_path))
+        number = len(features_list)
+        features = np.vstack(features_list)
+        labels = np.ones([number, 1]) * idx
+        data = np.hstack([features, labels])
+        data_set.append(data)
+        print("Loaded feature {}".format(idx))
+    return data_set
+
+
 if __name__ == '__main__':
     
     np.random.seed(5)
     data_dir = "C:\\Users\\wsy\\Desktop\\dataset3"
     save_dir = "C:\\Users\\wsy\\Desktop\\dataset3"
-    data_base = data_loader(data_dir, frame_per_second=93)
+    data_base = mfcc_loader(data_dir, frame_per_second=64,
+                            mfcc_cof=20, mfcc_ord=14)
     # save_file(data_base, save_dir)
-    save_data(save_dir, data_base)
+    save_data(save_dir, data_base, fname='mfcc.npy')
     # np.save(os.path.join(save_dir, 'data.npy'), np.vstack(data_base))
     print(len(data_base))
     print(len(data_base[5]))

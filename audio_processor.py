@@ -3,6 +3,7 @@ import librosa.display as lbdis
 import matplotlib.pyplot as plt
 import os
 import numpy as np
+import fft
 
 FRAME_PER_SECOND = 100  # 25ms per frame
 
@@ -15,16 +16,112 @@ def norm(input):
 
 class AudioProcessor:
 
-    def __init__(self, frame_per_second, feature_length: int, path):
-        self.frame_per_second = frame_per_second
+    def __init__(self, num_per_frame, path, feature_length: int = 20,
+                 mfcc_order: int = 16, mfcc_cof: int = 10):
+
+        self.num_per_frame = num_per_frame  # 每帧的样本数，窗长
         self.audio_data, self.sr = lb.load(path, sr=None)  # sr 是采样率 sample rate
         self.num_origin = len(self.audio_data)  # 总样本数
-        self.num_per_frame = int(self.sr / self.frame_per_second)  # 每帧的样本数，窗长
-        self.kernel_size = self.num_per_frame  # 核的大小，即每帧的长度
-        self.stride = int(0.5 * self.kernel_size)  # 步长
+        self.frame_per_second = int(self.sr / self.num_per_frame)
+        self.kernel_size = num_per_frame  # 核的大小，即每帧的长度, 窗长
+        self.stride = int(7 / 12 * self.kernel_size)  # 步长
         self.num_frame = int((self.num_origin - self.num_per_frame + 1) // self.stride)  # 剪后总帧数
         self.feature_length = int(feature_length)
+
+        self.mfcc_order = mfcc_order  # n
+        self.mfcc_cof = mfcc_cof  # m
         self.eps = 1e-5
+
+    def _coalesce_multiple_boundary(self, boundary, min_length=20, strict=True):
+            """
+            多词情况，合并距离较近的边界
+            :param boundary:
+            :param min_length:
+            :return:
+            """
+            if boundary.shape[0] < boundary.shape[1]:
+                boundary = boundary.transpose()
+            length = len(boundary)
+            boundary_list = []
+
+            for i in range(length):
+                if i < length - 1:
+                    if boundary[i + 1][0] - boundary[i][1] < min_length:
+                        boundary[i][1] = boundary[i + 1][1]
+                        boundary[i + 1][0] = boundary[i][0]
+                        continue
+
+                    if strict & (boundary[i][1] - boundary[i][0] < 0.8 * min_length):
+                        continue
+
+                    boundary_list.append(boundary[i])
+            return boundary_list
+
+    def _coalesce_boundary(self, boundary, min_length=20, strict=True):
+            """
+            单词情况，合并边界
+            :param boundary:
+            :param min_length:
+            :return:
+            """
+            boundary_ = np.array([boundary[0][0], boundary[-1][-1]])
+            return boundary_
+
+    def _conv1D(self, kernel, data):
+        """
+        1-dimentional convolution 一维卷积，这是加窗的函数
+        :param kernel:卷积核
+        :param data:
+        :return:
+        """
+        new_audio = np.zeros(self.num_frame)
+        for i in range(self.num_frame):
+            new_audio[i] = np.dot(kernel, data[i * self.stride: i * self.stride + self.num_per_frame])
+        return new_audio
+
+    def _add_window(self, kernel, data):
+        new_audio_list = []
+        for i in range(self.num_frame):
+            frame = kernel * data[i * self.stride: i * self.stride + self.num_per_frame]
+            new_audio_list.append(frame)
+        new_audio = np.vstack(new_audio_list)
+        assert len(new_audio_list) == self.num_frame
+        return new_audio
+
+    def _mfcc_filter(self, num_filters, low_freq, high_freq):
+        # low_freq = np.min(freq)
+        # high_freq = np.max(freq)
+
+        F_mel = lambda x: 1125 * (np.log(x / 700) + 1)
+        F_mel_converse = lambda x: 700 * (np.exp(x / 1125) - 1)
+
+        f_filter = np.zeros(num_filters)
+        for m in range(num_filters):
+            f_filter[m] = self.kernel_size / self.sr * F_mel_converse(
+                F_mel(low_freq) + m * (F_mel(high_freq) - F_mel(low_freq)) / (num_filters + 1)
+            )
+
+        H = np.zeros([num_filters, self.kernel_size])
+        for m in range(num_filters - 3):
+            for k in range(self.kernel_size - 1):
+                # if m == num_filters - 2:
+                #     if k >= f_filter[m + 1]:
+                #         H[m, k] = (f_filter[m + 2] - k) / (f_filter[m + 2] - f_filter[m + 1])
+
+                if k <= f_filter[m + 1] & k >= f_filter[m]:
+                    H[m, k] = (k - f_filter[m]) / (f_filter[m + 1] - f_filter[m])
+                elif k <= f_filter[m + 2] & k >= f_filter[m + 1] & m <= num_filters - 3:
+                    H[m, k] = (f_filter[m + 2] - k) / (f_filter[m + 2] - f_filter[m + 1])
+
+        print(np.sum(H, axis=0))
+        return H
+
+    def _discrete_cosine_transform(self):
+        cos_ary = np.zeros([self.mfcc_cof, self.mfcc_order])  # (M, N)
+        for n in range(self.mfcc_order - 1):
+            for m in range(self.mfcc_cof - 1):
+                cos_ary[m, n] = np.cos(np.pi * n * (2 * m - 1) / 2 / self.mfcc_cof)
+        return cos_ary
 
     def get_window(self, method="square"):
         """
@@ -42,18 +139,6 @@ class AudioProcessor:
             kernel = np.hamming(kernel_size)[np.newaxis, :]
 
         return kernel
-
-    def _conv1D(self, kernel, data):
-        """
-        1-dimentional convolution 一维卷积，这是加窗的函数
-        :param kernel:卷积核
-        :param data:
-        :return:
-        """
-        new_audio = np.zeros(self.num_frame)
-        for i in range(self.num_frame):
-            new_audio[i] = np.dot(kernel, data[i * self.stride: i * self.stride + self.num_per_frame])
-        return new_audio
 
     def get_avg_zero_rate(self, data, kernel):
         """
@@ -168,55 +253,6 @@ class AudioProcessor:
         boundary = (high_boundary * (1 - lmda) + lmda * low_boundary).astype(np.int).squeeze()
         return boundary
 
-    def _coalesce_multiple_boundary(self, boundary, min_length = 20, strict=True):
-        """
-        多词情况，合并距离较近的边界
-        :param boundary:
-        :param min_length:
-        :return:
-        """
-        if boundary.shape[0] < boundary.shape[1]:
-            boundary = boundary.transpose()
-        length = len(boundary)
-        boundary_list = []
-
-        for i in range(length):
-            if i < length - 1:
-                if boundary[i + 1][0] - boundary[i][1] < min_length:
-                    boundary[i][1] = boundary[i + 1][1]
-                    boundary[i + 1][0] = boundary[i][0]
-                    continue
-
-                if strict & (boundary[i][1] - boundary[i][0] < 0.8 * min_length):
-                    continue
-
-                boundary_list.append(boundary[i])
-        return boundary_list
-
-    def _coalesce_boundary(self, boundary, min_length = 20, strict=True):
-        """
-        单词情况，合并边界
-        :param boundary:
-        :param min_length:
-        :return:
-        """
-        boundary_ = np.array([boundary[0][0], boundary[-1][-1]])
-        return boundary_
-
-    def sum_per_frame_(self):
-        """
-        简单的加和， stride == kernel 的卷积
-        :return:
-        """
-
-        num_frame = int(self.num_origin // self.num_per_frame )
-        audio_data = self.audio_data[:num_frame * self.num_per_frame]
-        audio_data = np.resize(audio_data, [num_frame, self.num_per_frame])
-
-        print(np.shape(audio_data))
-        new_audio_data = np.sum(np.abs(audio_data), axis=1)
-        return new_audio_data
-
     def get_local_feature(self):
         """
         get feature from audio with ten numbers
@@ -280,6 +316,46 @@ class AudioProcessor:
             [upper_rate]
         ])
         return feature
+
+    def get_mfcc_feature(self):
+        '''
+
+        :return: numpy array
+        '''
+        assert self.frame_per_second not in [32, 64, 128, 256], \
+            Exception("Cannot operate butterfly computation ,"
+                      "frame per second should in [32, 64, 128, 256]")
+        hanning_kernel = self.get_window(method='hanning')
+        windowed = self._add_window(hanning_kernel, self.audio_data)  # [num_frame, kernel_size]
+        hanning_energy = self.get_energy(self.audio_data, hanning_kernel)
+        boundary = self.get_boundary(hanning_energy)
+        cropped = windowed[boundary[0] : boundary[1] + 1, :]
+        frequency = np.vstack([fft.fft(frame) for frame in np.vsplit(cropped, len(cropped))])
+        frequency = np.real(frequency)  # TODO: real or mode?
+        frequency_energy = frequency ** 2
+
+        low_freq = np.min(frequency_energy)
+        high_freq = np.max(frequency_energy)
+
+        H = self._mfcc_filter(self.mfcc_cof, low_freq, high_freq)
+        S = np.dot(frequency_energy, H.transpose())  # (F, M)
+        cos_ary = self._discrete_cosine_transform()
+        mfcc_features = np.sqrt(2 / self.mfcc_cof) * np.dot(S, cos_ary)
+        return mfcc_features
+
+    def sum_per_frame_(self):
+        """
+        简单的加和， stride == kernel 的卷积
+        :return:
+        """
+
+        num_frame = int(self.num_origin // self.num_per_frame )
+        audio_data = self.audio_data[:num_frame * self.num_per_frame]
+        audio_data = np.resize(audio_data, [num_frame, self.num_per_frame])
+
+        print(np.shape(audio_data))
+        new_audio_data = np.sum(np.abs(audio_data), axis=1)
+        return new_audio_data
 
 
 if __name__ == "__main__":
