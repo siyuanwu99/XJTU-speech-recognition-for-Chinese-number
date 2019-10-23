@@ -104,16 +104,13 @@ class AudioProcessor:
         H = np.zeros([num_filters, self.kernel_size])
         for m in range(num_filters - 3):
             for k in range(self.kernel_size - 1):
-                # if m == num_filters - 2:
-                #     if k >= f_filter[m + 1]:
-                #         H[m, k] = (f_filter[m + 2] - k) / (f_filter[m + 2] - f_filter[m + 1])
-
-                if k <= f_filter[m + 1] & k >= f_filter[m]:
+                if (k <= f_filter[m + 1]) and (k >= f_filter[m]):
                     H[m, k] = (k - f_filter[m]) / (f_filter[m + 1] - f_filter[m])
-                elif k <= f_filter[m + 2] & k >= f_filter[m + 1] & m <= num_filters - 3:
+                elif (k <= f_filter[m + 2]) and (k >= f_filter[m + 1]) and (m <= num_filters - 3):
                     H[m, k] = (f_filter[m + 2] - k) / (f_filter[m + 2] - f_filter[m + 1])
-
-        print(np.sum(H, axis=0))
+                elif k > f_filter[num_filters - 1]:
+                    H[m, k] = 1
+        # print(np.sum(H, axis=0))
         return H
 
     def _discrete_cosine_transform(self):
@@ -330,12 +327,12 @@ class AudioProcessor:
         hanning_energy = self.get_energy(self.audio_data, hanning_kernel)
         boundary = self.get_boundary(hanning_energy)
         cropped = windowed[boundary[0] : boundary[1] + 1, :]
-        frequency = np.vstack([fft.fft(frame) for frame in np.vsplit(cropped, len(cropped))])
+        frequency = np.vstack([fft.fft(frame.squeeze()) for frame in np.vsplit(cropped, len(cropped))])
         frequency = np.real(frequency)  # TODO: real or mode?
         frequency_energy = frequency ** 2
 
-        low_freq = np.min(frequency_energy)
-        high_freq = np.max(frequency_energy)
+        low_freq = self.sr / self.num_per_frame
+        high_freq = self.sr
 
         H = self._mfcc_filter(self.mfcc_cof, low_freq, high_freq)
         S = np.dot(frequency_energy, H.transpose())  # (F, M)
