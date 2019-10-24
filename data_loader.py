@@ -149,7 +149,7 @@ if __name__ == '__main__':
     np.random.seed(5)
     data_dir = "C:\\Users\\wsy\\Desktop\\dataset3"
     save_dir = "C:\\Users\\wsy\\Desktop\\dataset3"
-    data_base = mfcc_loader(data_dir, frame_per_second=64,
+    data_base = mfcc_loader(data_dir, frame_per_second=128,
                             mfcc_cof=20, mfcc_ord=14)
     # save_file(data_base, save_dir)
     save_data(save_dir, data_base, fname='mfcc.npy')
