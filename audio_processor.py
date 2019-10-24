@@ -337,7 +337,14 @@ class AudioProcessor:
         H = self._mfcc_filter(self.mfcc_cof, low_freq, high_freq)
         S = np.dot(frequency_energy, H.transpose())  # (F, M)
         cos_ary = self._discrete_cosine_transform()
-        mfcc_features = np.sqrt(2 / self.mfcc_cof) * np.dot(S, cos_ary)
+        mfcc_raw_features = np.sqrt(2 / self.mfcc_cof) * np.dot(S, cos_ary)  #（F，N)
+        mfcc_features = np.hstack(
+            [np.sum(mfcc_raw_features, axis=0),
+             np.max(mfcc_raw_features, axis=0),
+             np.min(mfcc_raw_features, axis=0),
+             np.std(mfcc_raw_features, axis=0)
+            ]
+        )
         return mfcc_features
 
     def sum_per_frame_(self):
