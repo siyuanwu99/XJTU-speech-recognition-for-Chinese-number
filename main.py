@@ -31,14 +31,28 @@ class AudioClassification(object):
         data_base = np.vstack(data_base)
         np.random.shuffle(data_base)
         print('\nNumber of Database: {}\n'.format(len(data_base)))
-        # 划分数据集
+        # # 划分数据集
         # num_validation = int(0.1 * len(data_base))
+
+        # # 由于都分到了6，因此去掉6看看分类器的效果
+        # print("Before", len(data_base))
+        # data_swap = []
+        # for line in np.vsplit(data_base, len(data_base)):
+        #     if line[:, -1] != 6:
+        #         data_swap.append(line)
+        # data_base = np.vstack(data_swap)
+        # print("After", len(data_base))
+
         self.num_train_set = int(0.85 * len(data_base))
         num_test_set = int(0.90 * len(data_base))
         self.train_set = data_base[0:self.num_train_set]
         self.train_set_val = data_base[0: 50]  # 参与训练，就是看下分类器效果
         self.val_set = data_base[self.num_train_set:num_test_set]
         self.test_set = data_base[num_test_set:]
+
+        # self.train_set = np.vstack([self.train_set, self.train_set, self.train_set, self.train_set, self.train_set])
+        # np.random.shuffle(self.train_set)
+
 
         self.code_book = self.get_class_codebook()  # 码本
         self.clsfier_list = []
@@ -260,7 +274,7 @@ class AudioClassification(object):
             dis = np.sum(np.abs(codebook - pdct) * accuracy, axis=1)
             cls[i] = np.argmin(dis)  # 每个分类器的准确率有不同的权重
 
-        self._print_val(cls)
+        self._print_val(cls, if_cfmatrix=True)
 
     def train_a_classifier(self, data, label, num=1000):
         '''
@@ -273,7 +287,7 @@ class AudioClassification(object):
         if self.method == 'lsvm':
             clf = sklearn.svm.LinearSVC()
         elif self.method == 'ksvm':
-            clf = sklearn.svm.SVC(kernel='sigmoid', gamma='scale')
+            clf = sklearn.svm.SVC(kernel='sigmoid', gamma='scale', max_iter=100000)
             # kernel: ‘linear’, ‘poly’, ‘rbf’, ‘sigmoid’, ‘precomputed’
             # gamma: 'auto' 'scale'
         elif self.method == 'dctree':
@@ -345,12 +359,14 @@ class AudioClassification(object):
 if __name__ == '__main__':
     np.random.seed(4)
     data_dir = "C:\\Users\\wsy\\Desktop\\dataset3"
-    save_dir = "C:\\Users\\wsy\\Desktop\\dataset3\\mfcc.npy"
+    save_dir = "C:\\Users\\wsy\\Desktop\\dataset3\\new_mfcc.npy"
     AC = AudioClassification('dctree', data_dir, save_dir,
-                             num_clsfiers=15,
-                             num_per_frame=100,
+                             num_clsfiers=40,
+                             num_per_frame=128,
                              if_loaded=True)
     AC.train()
+    # AC.trainer_reinforced(40)
 
 # best at present:
 # nc = 40, fl=0, fps=93
+# upperate 64: 68  128: 69

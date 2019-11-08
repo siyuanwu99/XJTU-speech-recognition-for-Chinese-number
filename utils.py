@@ -1,11 +1,12 @@
 import numpy as np
 import librosa.display as lbdis
 import matplotlib.pyplot as plt
+import matplotlib.patheffects as PathEffects
 from audio_processor import AudioProcessor
 import os
-
 from sklearn.metrics import confusion_matrix
-from sklearn.utils.multiclass import unique_labels
+from sklearn import manifold
+import seaborn as sns
 
 
 def save_data(save_dir, data, fname='data.npy'):
@@ -117,3 +118,121 @@ def plot_confusion_matrix(y_true, y_pred, classes,
     fig.tight_layout()
     plt.show()
     return ax
+
+
+def t_sne(features, labels):
+    '''
+    t-distributed stochastic neighbor embedding for visualization data.
+    :return:
+    '''
+    # tsne =
+    X_embedding = manifold.TSNE(n_components=2,
+                                init='pca',
+                                random_state=501).fit_transform(features)
+    print('Shape:', X_embedding.shape)
+    scatter(X_embedding, labels)
+    plt.show()
+
+
+def scatter(x, colors):
+    # We choose a color palette with seaborn.
+    palette = np.array(sns.color_palette("hls", 10))
+
+    # We create a scatter plot.
+    f = plt.figure(figsize=(8, 8))
+    ax = plt.subplot(aspect='equal')
+    sc = ax.scatter(x[:,0], x[:,1], lw=0, s=40,
+                    c=palette[colors.astype(np.int)])
+    plt.xlim(-25, 25)
+    plt.ylim(-25, 25)
+    ax.axis('off')
+    ax.axis('tight')
+
+    # We add the labels for each digit.
+    txts = []
+    for i in range(10):
+        # Position of each label.
+        xtext, ytext = np.median(x[colors == i, :], axis=0)
+        txt = ax.text(xtext, ytext, str(i), fontsize=24)
+        txt.set_path_effects([
+            PathEffects.Stroke(linewidth=5, foreground="w"),
+            PathEffects.Normal()])
+        txts.append(txt)
+
+    return f, ax, sc, txts
+
+
+def find_max_index(x, n: int=2):
+    '''
+    x: numpy array
+    n: int
+    index: numpy array
+    '''
+    x_ = x.copy()
+    all_idx = np.arange(0, len(x)).tolist()
+    index = []
+    for _ in range(n):
+        idx = np.argmax(x_)
+        index.append(idx)
+        x_[idx] = np.min(x)
+        all_idx.remove(idx)
+    return np.array(index).astype(np.int), np.array(all_idx).astype(np.int)
+
+
+def nearest_neighbour(data_base, label, num_point: int=3, num_best: int=10):
+    '''
+    Nearest neighbour test to find the best feature
+    feture 分析： 找提取特征中的最近邻，并比较
+    :param data:
+    :param label:
+    :param num_point:
+    :return:
+    '''
+    data_list = [[] for _ in range(10)]
+    flag = np.zeros(10)
+    s = 0
+
+    while min(flag) < num_point:
+        s += 1
+        l = int(label[s]) # label
+
+        if flag[l] < num_point:
+            data_list[l].append(data_base[s])
+            flag[l] += 1
+
+    # best_10 = np.zeros()
+    for i in range(10):
+        sum = 0
+        print('Label {:}'.format(i), end='\t')
+        for data in data_list[i]:
+            dis = -1 * np.sum(np.square(data_base - data), axis=1).squeeze()
+            best_ten, _ = find_max_index(dis, num_best + 1)
+            best_ten_label = label[best_ten[1:]].astype(np.int)
+            a = num_best - np.count_nonzero(best_ten_label - i)
+            sum += a
+            # print('\t', best_ten_label, '\t', a)
+        print('\tNearest Neighbour\t{}/{} \t {}'.
+              format(sum, num_best*num_point, sum/num_best/num_point))
+
+
+if __name__ == '__main__':
+    save_path = "C:\\Users\\wsy\\Desktop\\dataset3\\new_mfcc.npy"
+    if os.path.exists(os.path.join(save_path)):
+        data_base = np.load(os.path.join(save_path))
+        print("Using saved data base")
+    else:
+        print("Wrong Input")
+
+    # np.random.shuffle(data_base)
+    t_sne(data_base[:, :-1], data_base[:, -1])
+    # print("Time domain")
+    nearest_neighbour(data_base[:, :-1], data_base[:, -1], 20, 10)
+    # print("Frequency domain")
+    #
+    # save_path = "C:\\Users\\wsy\\Desktop\\dataset3\\mfcc64.npy"
+    # if os.path.exists(os.path.join(save_path)):
+    #     data_base = np.load(os.path.join(save_path))
+    #     print("Using saved data base")
+    # else:
+    #     print("Wrong Input")
+    # nearest_neighbour(data_base[:, :-1], data_base[:, -1], 20, 10)

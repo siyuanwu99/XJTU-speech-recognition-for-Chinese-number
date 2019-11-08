@@ -1,7 +1,10 @@
-# ASR
+# ASR Course Work
 
 This is a python implementation for automatic speech recognition.
 It can recognize number from 0 to 9 in chinese.
+这段代码实现了音频数字0~9的分类识别。
+
+[中文版](README-zh-CN.md)
 
 ## Environment
 
@@ -11,14 +14,10 @@ It can recognize number from 0 to 9 in chinese.
 - sklearn
 - librosa
 
-
 ## Introduction
 
+Method: extract time-series characters from frames of time domain & frequency domain features.
+Score: We got a more than 80 percent accuracy on our dataset
 
 
-## ASR in Time Domain
-
-
-
-## ASR in Frequency Domain
 

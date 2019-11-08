@@ -5,7 +5,7 @@ import os
 import numpy as np
 import fft
 
-FRAME_PER_SECOND = 100  # 25ms per frame
+NUM_PER_FRAME = 128  # 25ms per frame
 
 
 def norm(input):
@@ -281,7 +281,12 @@ class AudioProcessor:
         feature = np.hstack([square_feature, hanning_feature])
         return feature
 
-    def get_global_feature(self, iscropped=False):
+    def get_global_feature(self, hadcropped=False):
+        """
+        Get global features in time domain
+        :param hadcropped:
+        :return:
+        """
         square_kernel = self.get_window(method='square')
         hanning_kernel = self.get_window(method='hanning')
         square_data = self._conv1D(square_kernel, np.abs(self.audio_data))
@@ -292,7 +297,7 @@ class AudioProcessor:
         hanning_energy = self.get_energy(self.audio_data, hanning_kernel)
 
         # crop if haven't been cropped
-        if not iscropped:
+        if not hadcropped:
             boundary = self.get_boundary(square_energy)
             square_energy = square_energy[boundary[0]: boundary[1]+1]
             hanning_energy = hanning_energy[boundary[0]: boundary[1] + 1]
@@ -301,22 +306,22 @@ class AudioProcessor:
             square_azrate = square_azrate[boundary[0]: boundary[1] + 1]
             hanning_azrate = hanning_azrate[boundary[0]: boundary[1] + 1]
 
-        func = lambda x: [np.max(x), np.std(x), np.mean(x)]
+        func = lambda x: [np.max(x), np.std(x), np.mean(x)]  # global features I want to get
         upper_rate = self.get_upper_rate(square_energy)
         feature = np.hstack([
+            # [upper_rate],
             func(square_energy),
             func(hanning_energy),
             func(square_azrate),
             func(hanning_azrate),
             func(square_data),
-            func(hanning_data),
-            [upper_rate]
+            func(hanning_data)
         ])
         return feature
 
-    def get_mfcc_feature(self):
+    def get_mfcc_feature(self, hadcropped=False):
         '''
-
+        calculate Mel-frequency cepstral coefficients in frequency domain and extract features from MFCC
         :return: numpy array
         '''
         assert self.frame_per_second not in [32, 64, 128, 256], \
@@ -325,10 +330,14 @@ class AudioProcessor:
         hanning_kernel = self.get_window(method='hanning')
         windowed = self._add_window(hanning_kernel, self.audio_data)  # [num_frame, kernel_size]
         hanning_energy = self.get_energy(self.audio_data, hanning_kernel)
-        boundary = self.get_boundary(hanning_energy)
-        cropped = windowed[boundary[0] : boundary[1] + 1, :]
-        frequency = np.vstack([fft.fft(frame.squeeze()) for frame in np.vsplit(cropped, len(cropped))])
-        frequency = np.real(frequency)  # TODO: real or mode?
+
+        if not hadcropped:
+            boundary = self.get_boundary(hanning_energy)
+            cropped = windowed[boundary[0]: boundary[1] + 1, :]
+            frequency = np.vstack([fft.fft(frame.squeeze()) for frame in np.vsplit(cropped, len(cropped))])
+        else:
+            frequency = np.vstack([fft.fft(windowed)])
+        frequency = np.abs(frequency)
         frequency_energy = frequency ** 2
 
         low_freq = self.sr / self.num_per_frame
@@ -338,14 +347,29 @@ class AudioProcessor:
         S = np.dot(frequency_energy, H.transpose())  # (F, M)
         cos_ary = self._discrete_cosine_transform()
         mfcc_raw_features = np.sqrt(2 / self.mfcc_cof) * np.dot(S, cos_ary)  #（F，N)
+
+        upper = [self.get_upper_rate(fea) for fea in mfcc_raw_features.transpose()]
+        assert len(upper) == mfcc_raw_features.shape[1]
         mfcc_features = np.hstack(
-            [np.sum(mfcc_raw_features, axis=0),
+            [
+                # upper,
+             np.mean(mfcc_raw_features, axis=0),
              np.max(mfcc_raw_features, axis=0),
              np.min(mfcc_raw_features, axis=0),
-             np.std(mfcc_raw_features, axis=0)
+             np.std(mfcc_raw_features, axis=0),
             ]
         )
         return mfcc_features
+
+    def get_combined_feature(self, hadcropped):
+        '''
+        Get combined time domain and frequency domain features.
+        :return: numpy array
+        '''
+        time_domain = self.get_global_feature(hadcropped=hadcropped)
+        freq_domain = self.get_mfcc_feature(hadcropped=hadcropped)
+        return np.hstack([time_domain, freq_domain])
+
 
     def sum_per_frame_(self):
         """
@@ -353,7 +377,7 @@ class AudioProcessor:
         :return:
         """
 
-        num_frame = int(self.num_origin // self.num_per_frame )
+        num_frame = int(self.num_origin // self.num_per_frame)
         audio_data = self.audio_data[:num_frame * self.num_per_frame]
         audio_data = np.resize(audio_data, [num_frame, self.num_per_frame])
 
@@ -363,11 +387,11 @@ class AudioProcessor:
 
 
 if __name__ == "__main__":
-    # path = "C:\\Users\\wsy\\Documents\\Audio\\录音 (5).m4a"
-    path = "C:\\Users\\wsy\\Desktop\\dataset3\\lgt\\4\\data2.wav"
+    path = "C:\\User\\wsy\\Desktop\\录音 (3).m4a"
+    # path = "C:\\Users\\wsy\\Desktop\\dataset3\\lgt\\0\\data2.wav"
     # audio, sr = lb.load(path, sr=None)
     AP = AudioProcessor(feature_length=30,
-                        frame_per_second=FRAME_PER_SECOND,
+                        num_per_frame=NUM_PER_FRAME,
                         path=path)
     origin = AP.audio_data
     kernel = AP.get_window(method='square')
@@ -380,7 +404,7 @@ if __name__ == "__main__":
 
     # visualize
     plt.figure(1)
-    lbdis.waveplot(audio, sr=FRAME_PER_SECOND)
+    lbdis.waveplot(audio, sr=NUM_PER_FRAME)
     plt.title('windowed')
     plt.show()
 
@@ -390,22 +414,22 @@ if __name__ == "__main__":
     plt.show()
 
     plt.figure(3)
-    lbdis.waveplot(avg_zero_rate, sr=FRAME_PER_SECOND)
+    lbdis.waveplot(avg_zero_rate, sr=NUM_PER_FRAME)
     plt.title('azr')
     plt.show()
 
     plt.figure(4)
-    lbdis.waveplot(energy, sr=FRAME_PER_SECOND)
+    lbdis.waveplot(energy, sr=NUM_PER_FRAME)
     plt.title('energy')
     plt.show()
 
     plt.figure(5)
-    lbdis.waveplot(audio[boundary[0]:boundary[1]+1], sr=FRAME_PER_SECOND)
+    lbdis.waveplot(audio[boundary[0]:boundary[1]+1], sr=NUM_PER_FRAME)
     plt.title('cropped_avg')
     plt.show()
 
     plt.figure(6)
-    lbdis.waveplot(energy[boundary[0]:boundary[1]+1], sr=FRAME_PER_SECOND)
+    lbdis.waveplot(energy[boundary[0]:boundary[1]+1], sr=NUM_PER_FRAME)
     plt.title('cropped energy')
     plt.show()
 
