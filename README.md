@@ -17,7 +17,7 @@ It can recognize number from 0 to 9 in chinese.
 ## Introduction
 
 Method: extract time-series characters from frames of time domain & frequency domain features.
-Score: We got a more than 80 percent accuracy on our dataset
+
 
 
 
