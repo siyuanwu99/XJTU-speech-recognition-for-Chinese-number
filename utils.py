@@ -164,9 +164,9 @@ def scatter(x, colors):
 
 def find_max_index(x, n: int=2):
     '''
-    x: numpy array
-    n: int
-    index: numpy array
+    :param x: numpy array
+    :param n: int
+    :return index: numpy array
     '''
     x_ = x.copy()
     all_idx = np.arange(0, len(x)).tolist()
@@ -182,7 +182,7 @@ def find_max_index(x, n: int=2):
 def nearest_neighbour(data_base, label, num_point: int=3, num_best: int=10):
     '''
     Nearest neighbour test to find the best feature
-    feture 分析： 找提取特征中的最近邻，并比较
+    feature 分析： 找提取特征中的最近邻，并比较
     :param data:
     :param label:
     :param num_point:
@@ -200,7 +200,6 @@ def nearest_neighbour(data_base, label, num_point: int=3, num_best: int=10):
             data_list[l].append(data_base[s])
             flag[l] += 1
 
-    # best_10 = np.zeros()
     for i in range(10):
         sum = 0
         print('Label {:}'.format(i), end='\t')
@@ -210,13 +209,16 @@ def nearest_neighbour(data_base, label, num_point: int=3, num_best: int=10):
             best_ten_label = label[best_ten[1:]].astype(np.int)
             a = num_best - np.count_nonzero(best_ten_label - i)
             sum += a
-            # print('\t', best_ten_label, '\t', a)
+            print('\t', best_ten_label, '\t', a)
         print('\tNearest Neighbour\t{}/{} \t {}'.
               format(sum, num_best*num_point, sum/num_best/num_point))
 
+def pca_analysis(data_base):
+    pass
+
 
 if __name__ == '__main__':
-    save_path = "C:\\Users\\wsy\\Desktop\\dataset3\\new_mfcc.npy"
+    save_path = "C:\\Users\\wsy\\Desktop\\dataset3\\ts64.npy"
     if os.path.exists(os.path.join(save_path)):
         data_base = np.load(os.path.join(save_path))
         print("Using saved data base")
@@ -224,11 +226,11 @@ if __name__ == '__main__':
         print("Wrong Input")
 
     # np.random.shuffle(data_base)
-    t_sne(data_base[:, :-1], data_base[:, -1])
-    # print("Time domain")
-    nearest_neighbour(data_base[:, :-1], data_base[:, -1], 20, 10)
-    # print("Frequency domain")
-    #
+    # t_sne(data_base[:, :-1], data_base[:, -1])
+
+    nearest_neighbour(data_base[:, :-1], data_base[:, -1], 5, 10)
+
+
     # save_path = "C:\\Users\\wsy\\Desktop\\dataset3\\mfcc64.npy"
     # if os.path.exists(os.path.join(save_path)):
     #     data_base = np.load(os.path.join(save_path))

@@ -1,71 +1,71 @@
 import librosa as lb
 import librosa.display as lbdis
 import matplotlib.pyplot as plt
-import os
+import tsfresh.feature_extraction.feature_calculators as feature_calc
 import numpy as np
 import fft
 
-NUM_PER_FRAME = 128  # 25ms per frame
+NUM_PER_FRAME = 128  # 7.8125ms per frame
 
 
 def norm(input):
     mean = np.mean(input)
-    std = np.std(input)
-    return (input - mean) / std
+    max = np.max(input)
+    return (input - mean) / max
 
 
 class AudioProcessor:
 
-    def __init__(self, num_per_frame, path, feature_length: int = 20,
+    def __init__(self, num_per_frame, path, local_feature_length: int = 20,
                  mfcc_order: int = 16, mfcc_cof: int = 10):
 
         self.num_per_frame = num_per_frame  # 每帧的样本数，窗长
-        self.audio_data, self.sr = lb.load(path, sr=None)  # sr 是采样率 sample rate
-        self.num_origin = len(self.audio_data)  # 总样本数
+        self.meta_audio_data, self.sr = lb.load(path, sr=None)  # sr 是采样率 sample rate
+        self.num_origin = len(self.meta_audio_data)  # 总样本数
         self.frame_per_second = int(self.sr / self.num_per_frame)
         self.kernel_size = num_per_frame  # 核的大小，即每帧的长度, 窗长
         self.stride = int(7 / 12 * self.kernel_size)  # 步长
         self.num_frame = int((self.num_origin - self.num_per_frame + 1) // self.stride)  # 剪后总帧数
-        self.feature_length = int(feature_length)
+        self.feature_length = int(local_feature_length)
 
         self.mfcc_order = mfcc_order  # n
         self.mfcc_cof = mfcc_cof  # m
         self.eps = 1e-5
 
     def _coalesce_multiple_boundary(self, boundary, min_length=20, strict=True):
-            """
-            多词情况，合并距离较近的边界
-            :param boundary:
-            :param min_length:
-            :return:
-            """
-            if boundary.shape[0] < boundary.shape[1]:
-                boundary = boundary.transpose()
-            length = len(boundary)
-            boundary_list = []
+        """
+        多词情况，合并距离较近的边界
+        :param boundary:
+        :param min_length:
+        :return:
+        """
+        if boundary.shape[0] < boundary.shape[1]:
+            boundary = boundary.transpose()
+        length = len(boundary)
+        boundary_list = []
 
-            for i in range(length):
-                if i < length - 1:
-                    if boundary[i + 1][0] - boundary[i][1] < min_length:
-                        boundary[i][1] = boundary[i + 1][1]
-                        boundary[i + 1][0] = boundary[i][0]
-                        continue
+        for i in range(length):
+            if i < length - 1:
+                if boundary[i + 1][0] - boundary[i][1] < min_length:
+                    boundary[i][1] = boundary[i + 1][1]
+                    boundary[i + 1][0] = boundary[i][0]
+                    continue
 
-                    if strict & (boundary[i][1] - boundary[i][0] < 0.8 * min_length):
-                        continue
+                if strict & (boundary[i][1] - boundary[i][0] < 0.8 * min_length):
+                    continue
 
-                    boundary_list.append(boundary[i])
-            return boundary_list
+                boundary_list.append(boundary[i])
+        return boundary_list
 
     def _coalesce_boundary(self, boundary, min_length=20, strict=True):
-            """
-            单词情况，合并边界
-            :param boundary:
-            :param min_length:
-            :return:
-            """
-            boundary_ = np.array([boundary[0][0], boundary[-1][-1]])
-            return boundary_
+        """
+        单词情况，合并边界
+        :param boundary:
+        :param min_length:
+        :return:
+        """
+        boundary_ = np.array([boundary[0][0], boundary[-1][-1]])
+        return boundary_
 
     def _conv1D(self, kernel, data):
         """
@@ -120,7 +120,7 @@ class AudioProcessor:
                 cos_ary[m, n] = np.cos(np.pi * n * (2 * m - 1) / 2 / self.mfcc_cof)
         return cos_ary
 
-    def get_window(self, method="square"):
+    def get_window(self, method="hanning"):
         """
         get windows to audio data 语音信号生成窗
         Method should in [square, hanning, hamming]
@@ -134,7 +134,9 @@ class AudioProcessor:
             kernel = np.hanning(kernel_size)[np.newaxis, :]
         elif method == 'hamming':
             kernel = np.hamming(kernel_size)[np.newaxis, :]
-
+        else:
+            Exception('Undefined method!')
+            kernel = np.zeros([1, kernel_size])
         return kernel
 
     def get_avg_zero_rate(self, data, kernel):
@@ -210,7 +212,8 @@ class AudioProcessor:
         for i in range(len(high_boundary)):
             if not np.cumprod(high_boundary[i] - low_boundary[i])[1] < 0:  # lb and hb not match
                 pass
-            boundary = (high_boundary[i] * (1 - lmda) + lmda * low_boundary[i]).astype(np.int)   # using the average between high and low
+            boundary = (high_boundary[i] * (1 - lmda) + lmda * low_boundary[i]).astype(
+                np.int)  # using the average between high and low
             # boundary = low_boundary[i]
             cropped_data.append(data[boundary[0]: boundary[1] + 1])
             cropped_boundary.append(boundary)
@@ -252,21 +255,21 @@ class AudioProcessor:
 
     def get_local_feature(self):
         """
-        get feature from audio with ten numbers
-        # TODO: this function only include features from 'square' and 'hanning' windows
+        Only extracted local features from given signals.
+        This function is not useful in this experiment.
         :return:
         """
         square_kernel = self.get_window(method='square')
         hanning_kernel = self.get_window(method='hanning')
-        square_data = self._conv1D(square_kernel, self.audio_data)
-        hanning_data = self._conv1D(hanning_kernel, self.audio_data)
-        square_azrate = self.get_avg_zero_rate(self.audio_data, square_kernel)
-        hanning_azrate = self.get_avg_zero_rate(self.audio_data, hanning_kernel)
-        square_energy = self.get_energy(self.audio_data, square_kernel)
-        hanning_energy = self.get_energy(self.audio_data, hanning_kernel)
+        square_data = self._conv1D(square_kernel, self.meta_audio_data)
+        hanning_data = self._conv1D(hanning_kernel, self.meta_audio_data)
+        square_azrate = self.get_avg_zero_rate(self.meta_audio_data, square_kernel)
+        hanning_azrate = self.get_avg_zero_rate(self.meta_audio_data, hanning_kernel)
+        square_energy = self.get_energy(self.meta_audio_data, square_kernel)
+        hanning_energy = self.get_energy(self.meta_audio_data, hanning_kernel)
 
         # cut
-        crp_data, crp_boundary = self.get_boundary(square_data, square_azrate, square_energy)
+        crp_data, crp_boundary = self.get_boundary(square_energy)
 
         # extract feature
         lb = crp_boundary[0]
@@ -281,41 +284,34 @@ class AudioProcessor:
         feature = np.hstack([square_feature, hanning_feature])
         return feature
 
-    def get_global_feature(self, hadcropped=False):
+    def get_global_feature(self):
         """
-        Get global features in time domain
+        获取时域全局特征，包含最大值、标准差、平均值
         :param hadcropped:
         :return:
         """
-        square_kernel = self.get_window(method='square')
-        hanning_kernel = self.get_window(method='hanning')
-        square_data = self._conv1D(square_kernel, np.abs(self.audio_data))
-        hanning_data = self._conv1D(hanning_kernel, np.abs(self.audio_data))
-        square_azrate = self.get_avg_zero_rate(self.audio_data, square_kernel)
-        hanning_azrate = self.get_avg_zero_rate(self.audio_data, hanning_kernel)
-        square_energy = self.get_energy(self.audio_data, square_kernel)
-        hanning_energy = self.get_energy(self.audio_data, hanning_kernel)
-
-        # crop if haven't been cropped
-        if not hadcropped:
-            boundary = self.get_boundary(square_energy)
-            square_energy = square_energy[boundary[0]: boundary[1]+1]
-            hanning_energy = hanning_energy[boundary[0]: boundary[1] + 1]
-            square_data = square_data[boundary[0]: boundary[1] + 1]
-            hanning_data = hanning_data[boundary[0]: boundary[1] + 1]
-            square_azrate = square_azrate[boundary[0]: boundary[1] + 1]
-            hanning_azrate = hanning_azrate[boundary[0]: boundary[1] + 1]
-
-        func = lambda x: [np.max(x), np.std(x), np.mean(x)]  # global features I want to get
+        square_data, square_energy, square_azrate = self.pre_process(method='hanning', ifcrop=True)
+        func = lambda x: [
+            # feature_calc.autocorrelation(norm(x), 5),
+            feature_calc.approximate_entropy(norm(x), 5, 1),
+            feature_calc.cid_ce(x, normalize=True),
+            feature_calc.count_above_mean(x),
+            feature_calc.first_location_of_minimum(x),
+            feature_calc.first_location_of_maximum(x),
+            feature_calc.last_location_of_maximum(x),
+            feature_calc.last_location_of_minimum(x),
+            feature_calc.longest_strike_above_mean(x),
+            feature_calc.longest_strike_below_mean(x),
+            feature_calc.number_crossing_m(x, np.mean(x)),
+            feature_calc.skewness(x),
+            feature_calc.time_reversal_asymmetry_statistic(x, 5)
+                          ]
+        # global features I want to get
         upper_rate = self.get_upper_rate(square_energy)
         feature = np.hstack([
-            # [upper_rate],
-            func(square_energy),
-            func(hanning_energy),
+            [upper_rate],
             func(square_azrate),
-            func(hanning_azrate),
-            func(square_data),
-            func(hanning_data)
+            func(square_energy)
         ])
         return feature
 
@@ -328,8 +324,8 @@ class AudioProcessor:
             Exception("Cannot operate butterfly computation ,"
                       "frame per second should in [32, 64, 128, 256]")
         hanning_kernel = self.get_window(method='hanning')
-        windowed = self._add_window(hanning_kernel, self.audio_data)  # [num_frame, kernel_size]
-        hanning_energy = self.get_energy(self.audio_data, hanning_kernel)
+        windowed = self._add_window(hanning_kernel, self.meta_audio_data)  # [num_frame, kernel_size]
+        hanning_energy = self.get_energy(self.meta_audio_data, hanning_kernel)
 
         if not hadcropped:
             boundary = self.get_boundary(hanning_energy)
@@ -346,17 +342,17 @@ class AudioProcessor:
         H = self._mfcc_filter(self.mfcc_cof, low_freq, high_freq)
         S = np.dot(frequency_energy, H.transpose())  # (F, M)
         cos_ary = self._discrete_cosine_transform()
-        mfcc_raw_features = np.sqrt(2 / self.mfcc_cof) * np.dot(S, cos_ary)  #（F，N)
+        mfcc_raw_features = np.sqrt(2 / self.mfcc_cof) * np.dot(S, cos_ary)  # （F，N)
 
         upper = [self.get_upper_rate(fea) for fea in mfcc_raw_features.transpose()]
         assert len(upper) == mfcc_raw_features.shape[1]
         mfcc_features = np.hstack(
             [
                 # upper,
-             np.mean(mfcc_raw_features, axis=0),
-             np.max(mfcc_raw_features, axis=0),
-             np.min(mfcc_raw_features, axis=0),
-             np.std(mfcc_raw_features, axis=0),
+                np.mean(mfcc_raw_features, axis=0),
+                np.max(mfcc_raw_features, axis=0),
+                np.min(mfcc_raw_features, axis=0),
+                np.std(mfcc_raw_features, axis=0),
             ]
         )
         return mfcc_features
@@ -370,71 +366,81 @@ class AudioProcessor:
         freq_domain = self.get_mfcc_feature(hadcropped=hadcropped)
         return np.hstack([time_domain, freq_domain])
 
-
     def sum_per_frame_(self):
         """
-        简单的加和， stride == kernel 的卷积
+        简单的加和， stride == kernel 的卷积。
+        已弃用
         :return:
         """
 
         num_frame = int(self.num_origin // self.num_per_frame)
-        audio_data = self.audio_data[:num_frame * self.num_per_frame]
+        audio_data = self.meta_audio_data[:num_frame * self.num_per_frame]
         audio_data = np.resize(audio_data, [num_frame, self.num_per_frame])
 
         print(np.shape(audio_data))
         new_audio_data = np.sum(np.abs(audio_data), axis=1)
         return new_audio_data
 
+    def pre_process(self, method, ifcrop=True):
+        """
+        预处理数据，返回绝对平均值、过零率、能量
+        :param method: window method
+        :param ifcrop:
+        :return: average, average zero rate, energy
+        """
+
+        kernel = self.get_window(method=method)
+        avg_data = self._conv1D(kernel, self.meta_audio_data)
+        azrate = self.get_avg_zero_rate(self.meta_audio_data, kernel)
+        energy = self.get_energy(self.meta_audio_data, kernel)
+
+        if ifcrop:
+            boundary = self.get_boundary(energy)
+            avg_data = avg_data[boundary[0]: boundary[1] + 1]
+            azrate = azrate[boundary[0]: boundary[1] + 1]
+            energy = energy[boundary[0]: boundary[1] + 1]
+        return avg_data, azrate, energy
+
 
 if __name__ == "__main__":
-    path = "C:\\User\\wsy\\Desktop\\录音 (3).m4a"
-    # path = "C:\\Users\\wsy\\Desktop\\dataset3\\lgt\\0\\data2.wav"
-    # audio, sr = lb.load(path, sr=None)
-    AP = AudioProcessor(feature_length=30,
-                        num_per_frame=NUM_PER_FRAME,
-                        path=path)
-    origin = AP.audio_data
-    kernel = AP.get_window(method='square')
-    audio = AP._conv1D(kernel, origin)
-    avg_zero_rate = AP.get_avg_zero_rate(origin, kernel)
-    energy = AP.get_energy(origin, kernel)
-    boundary = AP.get_boundary(energy)
+    # load files
+    # path = "C:\\User\\wsy\\Desktop\\录音 (3).m4a"
+    path1 = "C:\\Users\\wsy\\Desktop\\dataset3\\lgt\\9\\data5.wav"
+    # path2 = "C:\\Users\\wsy\\Desktop\\dataset3\\lgt\\8\\data10.wav"
+    # path3 = "C:\\Users\\wsy\\Desktop\\dataset3\\lgt\\3\\data13.wav"
 
-    features = AP.get_global_feature()
+    AP1 = AudioProcessor(num_per_frame=NUM_PER_FRAME, path=path1)
+    # AP2 = AudioProcessor(num_per_frame=NUM_PER_FRAME, path=path2)
+    # AP3 = AudioProcessor(num_per_frame=NUM_PER_FRAME, path=path3)
+
+    origin1 = AP1.meta_audio_data
+    avg1, azr1, eng1 = AP1.pre_process(method='hanning')
+    feature = AP1.get_global_feature()
+    print(feature)
+
+    # origin2 = AP2.meta_audio_data
+    # avg2, azr2, eng2 = AP2.pre_process(method='hanning')
+    #
+    # origin3 = AP3.meta_audio_data
+    # avg3, azr3, eng3 = AP3.pre_process(method='hanning')
 
     # visualize
-    plt.figure(1)
-    lbdis.waveplot(audio, sr=NUM_PER_FRAME)
-    plt.title('windowed')
-    plt.show()
+    # plt.figure(1)
+    # lbdis.waveplot(eng1, sr=NUM_PER_FRAME)
+    # plt.title('Number 9 lgt')
+    # plt.savefig("C:\\Users\\wsy\\Desktop\\lgt_9.png")
+    # plt.show()
+    #
+    # plt.figure(2)
+    # lbdis.waveplot(origin2, sr=NUM_PER_FRAME)
+    # plt.title('Number 8 lgt')
+    # plt.savefig("C:\\Users\\wsy\\Desktop\\wsy_8.png")
+    # plt.show()
+    #
+    # plt.figure(2)
+    # lbdis.waveplot(origin3, sr=NUM_PER_FRAME)
+    # plt.title('Number 3 lgt')
+    # plt.savefig("C:\\Users\\wsy\\Desktop\\lst_3.png")
+    # plt.show()
 
-    plt.figure(2)
-    lbdis.waveplot(origin, sr=48000)
-    plt.title("origin")
-    plt.show()
 
-    plt.figure(3)
-    lbdis.waveplot(avg_zero_rate, sr=NUM_PER_FRAME)
-    plt.title('azr')
-    plt.show()
-
-    plt.figure(4)
-    lbdis.waveplot(energy, sr=NUM_PER_FRAME)
-    plt.title('energy')
-    plt.show()
-
-    plt.figure(5)
-    lbdis.waveplot(audio[boundary[0]:boundary[1]+1], sr=NUM_PER_FRAME)
-    plt.title('cropped_avg')
-    plt.show()
-
-    plt.figure(6)
-    lbdis.waveplot(energy[boundary[0]:boundary[1]+1], sr=NUM_PER_FRAME)
-    plt.title('cropped energy')
-    plt.show()
-
-    print(len(audio))
-    print("number of features", len(features))
-    print(features[0])
-    features = np.array(features)
-    print(features.shape)

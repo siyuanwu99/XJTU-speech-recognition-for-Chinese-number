@@ -89,7 +89,8 @@ def data_loader(data_dir, num_per_frame=100, feature_length=20):
         # get audio data from file
         for file_path in file_list:
             A = AudioProcessor(num_per_frame, file_path)
-            features = A.get_combined_feature(hadcropped=False)
+            # features = A.get_combined_feature(hadcropped=False)
+            features = A.get_global_feature()
             if features == []:
                 print("extract error occurred in {}".format(file_path))
                 continue
@@ -152,10 +153,9 @@ if __name__ == '__main__':
     save_dir = "C:\\Users\\wsy\\Desktop\\dataset3"
     # data_base = mfcc_loader(data_dir, num_per_frame=128,
     #                         mfcc_cof=20, mfcc_ord=14)
-    data_base = mfcc_loader(data_dir, num_per_frame=128, mfcc_cof=25,
-                            mfcc_ord=14)
+    data_base = data_loader(data_dir, num_per_frame=128)
     # save_file(data_base, save_dir)
-    save_data(save_dir, data_base, fname='comb_128.npy')
+    save_data(save_dir, data_base, fname='ts128.npy')
     # np.save(os.path.join(save_dir, 'data.npy'), np.vstack(data_base))
     print(len(data_base))
     print(len(data_base[5]))
@@ -163,7 +163,8 @@ if __name__ == '__main__':
 
     print('-'*20)
 
-    data_base = mfcc_loader(data_dir, num_per_frame=64, mfcc_cof=25,
-                            mfcc_ord=14)
-    save_data(save_dir, data_base, fname='comb_64.npy')
+    # data_base = mfcc_loader(data_dir, num_per_frame=64, mfcc_cof=25,
+    #                         mfcc_ord=14)
+    data_base = data_loader(data_dir, num_per_frame=64)
+    save_data(save_dir, data_base, fname='ts64.npy')
 

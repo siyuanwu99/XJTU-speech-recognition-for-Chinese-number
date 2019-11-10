@@ -359,8 +359,8 @@ class AudioClassification(object):
 if __name__ == '__main__':
     np.random.seed(4)
     data_dir = "C:\\Users\\wsy\\Desktop\\dataset3"
-    save_dir = "C:\\Users\\wsy\\Desktop\\dataset3\\mfcc128_25.npy"
-    AC = AudioClassification('svm_ovr', data_dir, save_dir,
+    save_dir = "C:\\Users\\wsy\\Desktop\\dataset3\\ts128.npy"
+    AC = AudioClassification('dctree', data_dir, save_dir,
                              num_clsfiers=20,
                              num_per_frame=128,
                              if_loaded=True)
