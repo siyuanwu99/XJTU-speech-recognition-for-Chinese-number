@@ -293,6 +293,7 @@ class AudioProcessor:
         square_data, square_energy, square_azrate = self.pre_process(method='hanning', ifcrop=True)
         func = lambda x: [
             # feature_calc.autocorrelation(norm(x), 5),
+            np.std(x),
             feature_calc.approximate_entropy(norm(x), 5, 1),
             feature_calc.cid_ce(x, normalize=True),
             feature_calc.count_above_mean(x),
@@ -301,14 +302,14 @@ class AudioProcessor:
             feature_calc.last_location_of_maximum(x),
             feature_calc.last_location_of_minimum(x),
             feature_calc.longest_strike_above_mean(x),
-            feature_calc.longest_strike_below_mean(x),
-            feature_calc.number_crossing_m(x, np.mean(x)),
+            feature_calc.number_crossing_m(x, 0.8*np.max(x)),
             feature_calc.skewness(x),
             feature_calc.time_reversal_asymmetry_statistic(x, 5)
                           ]
         # global features I want to get
         upper_rate = self.get_upper_rate(square_energy)
         feature = np.hstack([
+            [np.mean(norm(square_energy))],
             [upper_rate],
             func(square_azrate),
             func(square_energy)
@@ -346,14 +347,26 @@ class AudioProcessor:
 
         upper = [self.get_upper_rate(fea) for fea in mfcc_raw_features.transpose()]
         assert len(upper) == mfcc_raw_features.shape[1]
+
+        func = lambda x: [
+            # feature_calc.autocorrelation(norm(x), 5),
+            np.std(x),
+            feature_calc.approximate_entropy(norm(x), 5, 1),
+            feature_calc.cid_ce(x, normalize=True),
+            feature_calc.count_above_mean(x),
+            feature_calc.first_location_of_minimum(x),
+            feature_calc.first_location_of_maximum(x),
+            feature_calc.last_location_of_maximum(x),
+            feature_calc.last_location_of_minimum(x),
+            feature_calc.longest_strike_above_mean(x),
+            feature_calc.number_crossing_m(x, 0.8*np.max(x)),
+            feature_calc.skewness(x),
+            feature_calc.time_reversal_asymmetry_statistic(x, 5)
+                          ]
+
         mfcc_features = np.hstack(
-            [
-                # upper,
-                np.mean(mfcc_raw_features, axis=0),
-                np.max(mfcc_raw_features, axis=0),
-                np.min(mfcc_raw_features, axis=0),
-                np.std(mfcc_raw_features, axis=0),
-            ]
+            [func(col) for col in mfcc_raw_features.transpose()]
+
         )
         return mfcc_features
 
@@ -388,7 +401,6 @@ class AudioProcessor:
         :param ifcrop:
         :return: average, average zero rate, energy
         """
-
         kernel = self.get_window(method=method)
         avg_data = self._conv1D(kernel, self.meta_audio_data)
         azrate = self.get_avg_zero_rate(self.meta_audio_data, kernel)

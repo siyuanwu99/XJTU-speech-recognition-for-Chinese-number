@@ -30,6 +30,7 @@ class AudioClassification(object):
         # dataloader: list of numpy
         data_base = np.vstack(data_base)
         np.random.shuffle(data_base)
+        data_base = np.hstack([data_base[:, :157], data_base[:, -1:]])
         print('\nNumber of Database: {}\n'.format(len(data_base)))
         # # 划分数据集
         # num_validation = int(0.1 * len(data_base))
@@ -359,9 +360,9 @@ class AudioClassification(object):
 if __name__ == '__main__':
     np.random.seed(4)
     data_dir = "C:\\Users\\wsy\\Desktop\\dataset3"
-    save_dir = "C:\\Users\\wsy\\Desktop\\dataset3\\ts128.npy"
+    save_dir = "C:\\Users\\wsy\\Desktop\\dataset3\\mfccts128.npy"
     AC = AudioClassification('dctree', data_dir, save_dir,
-                             num_clsfiers=20,
+                             num_clsfiers=40,
                              num_per_frame=128,
                              if_loaded=True)
     AC.train()

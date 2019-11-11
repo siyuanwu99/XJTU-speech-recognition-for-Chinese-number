@@ -4,9 +4,11 @@ import matplotlib.pyplot as plt
 import matplotlib.patheffects as PathEffects
 from audio_processor import AudioProcessor
 import os
+import glob
 from sklearn.metrics import confusion_matrix
 from sklearn import manifold
 import seaborn as sns
+import librosa as lb
 
 
 def save_data(save_dir, data, fname='data.npy'):
@@ -120,7 +122,7 @@ def plot_confusion_matrix(y_true, y_pred, classes,
     return ax
 
 
-def t_sne(features, labels):
+def t_sne(features, labels, fname='t-sne.png'):
     '''
     t-distributed stochastic neighbor embedding for visualization data.
     :return:
@@ -128,42 +130,45 @@ def t_sne(features, labels):
     # tsne =
     X_embedding = manifold.TSNE(n_components=2,
                                 init='pca',
-                                random_state=501).fit_transform(features)
+                                learning_rate=600
+                                ).fit_transform(features)
     print('Shape:', X_embedding.shape)
     scatter(X_embedding, labels)
+    plt.savefig(fname)
     plt.show()
 
 
 def scatter(x, colors):
     # We choose a color palette with seaborn.
-    palette = np.array(sns.color_palette("hls", 10))
+    # palette = np.array(sns.color_palette("hls", 10))
 
     # We create a scatter plot.
     f = plt.figure(figsize=(8, 8))
-    ax = plt.subplot(aspect='equal')
-    sc = ax.scatter(x[:,0], x[:,1], lw=0, s=40,
-                    c=palette[colors.astype(np.int)])
+    # ax = plt.subplot(aspect='equal')
+    plt.scatter(x[:,0], x[:,1], c=colors, s=40, lw=0,
+                cmap=plt.cm.get_cmap("jet", 10))
+    plt.colorbar()
     plt.xlim(-25, 25)
     plt.ylim(-25, 25)
-    ax.axis('off')
-    ax.axis('tight')
+
+    plt.axis('off')
+    plt.axis('tight')
 
     # We add the labels for each digit.
     txts = []
     for i in range(10):
         # Position of each label.
         xtext, ytext = np.median(x[colors == i, :], axis=0)
-        txt = ax.text(xtext, ytext, str(i), fontsize=24)
+        txt = plt.text(xtext, ytext, str(i), fontsize=24)
         txt.set_path_effects([
             PathEffects.Stroke(linewidth=5, foreground="w"),
             PathEffects.Normal()])
         txts.append(txt)
 
-    return f, ax, sc, txts
-
 
 def find_max_index(x, n: int=2):
     '''
+    find max n index from the give 1-D matrix
     :param x: numpy array
     :param n: int
     :return index: numpy array
@@ -209,32 +214,57 @@ def nearest_neighbour(data_base, label, num_point: int=3, num_best: int=10):
             best_ten_label = label[best_ten[1:]].astype(np.int)
             a = num_best - np.count_nonzero(best_ten_label - i)
             sum += a
-            print('\t', best_ten_label, '\t', a)
+            # print('\t', best_ten_label, '\t', a)
         print('\tNearest Neighbour\t{}/{} \t {}'.
               format(sum, num_best*num_point, sum/num_best/num_point))
 
-def pca_analysis(data_base):
-    pass
+
+def pca_analysis(data, label):
+    from sklearn.decomposition import PCA
+    pca = PCA(4)
+    pca.fit(data, label)
+    new_data = pca.transform(data)
+    new_data_base = np.hstack([new_data, label[:, np.newaxis]])
+    return new_data_base
+
+
+def waveplot_all(data_dir, NUM=10):
+    """
+    load all data from data_dir
+    :param data_dir:
+    :return: list of array
+    """
+    data_set = []
+    for idx in range(NUM):
+        data_path = os.path.join(data_dir, '*', '{}'.format(idx), '*.wav')
+        file_list = glob.glob(data_path)
+
+        # get audio data from file
+        for file_path in file_list:
+            wave, sr = lb.load(file_path, sr=None)
+            lbdis.waveplot(wave, sr=sr)
+            plt.title(file_path)
+            plt.savefig(file_path.replace('wav', 'png'))
+            plt.close()
+
+            print("saved fig {}".format(file_path))
+
+    return data_set
 
 
 if __name__ == '__main__':
-    save_path = "C:\\Users\\wsy\\Desktop\\dataset3\\ts64.npy"
+    # data_dir = "C:\\Users\\wsy\\Desktop\\dataset3"
+    # waveplot_all(data_dir)
+    save_path = "C:\\Users\\wsy\\Desktop\\dataset3\\mfcc128_25.npy"
     if os.path.exists(os.path.join(save_path)):
         data_base = np.load(os.path.join(save_path))
         print("Using saved data base")
     else:
         print("Wrong Input")
 
-    # np.random.shuffle(data_base)
-    # t_sne(data_base[:, :-1], data_base[:, -1])
+    np.random.shuffle(data_base)
+    data_base = pca_analysis(data_base, data_base[:, -1])
+    nearest_neighbour(data_base[:, :-1], data_base[:, -1], 20, 10)
+    t_sne(data_base[:, :-1], data_base[:, -1], fname="C:\\Users\\wsy\\Desktop\\dataset3\\mfccts128.png")
 
-    nearest_neighbour(data_base[:, :-1], data_base[:, -1], 5, 10)
 
-
-    # save_path = "C:\\Users\\wsy\\Desktop\\dataset3\\mfcc64.npy"
-    # if os.path.exists(os.path.join(save_path)):
-    #     data_base = np.load(os.path.join(save_path))
-    #     print("Using saved data base")
-    # else:
-    #     print("Wrong Input")
-    # nearest_neighbour(data_base[:, :-1], data_base[:, -1], 20, 10)
